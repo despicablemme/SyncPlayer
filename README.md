@@ -4,6 +4,17 @@
 
 ---
 
+## 👋 给新 session / 新 agent
+
+如果你第一次接触这个项目，按顺序看：
+
+1. **[docs/README.md](./docs/README.md)** — 文档索引（哪个文档看什么）
+2. **[docs/STATUS.md](./docs/STATUS.md)** — 当前进度、下一步
+3. **[docs/ROADMAP.md](./docs/ROADMAP.md)** — 目标 + 决策
+4. **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — 架构细节
+
+---
+
 ## 🚀 快速开始（30 秒上手）
 
 ### macOS / Linux 用户
