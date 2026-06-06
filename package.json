@@ -1,17 +1,23 @@
 {
   "name": "syncplay",
-  "version": "1.0.0",
-  "description": "> 视频同步播放工具 — 异地同步看片神器",
-  "main": "index.js",
+  "version": "0.2.0",
+  "description": "异地同步看片神器 — 两人异地同时播放同一视频，进度实时同步",
+  "main": "src/server/server.js",
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/unit/*.test.js",
+    "test:e2e": "node test/e2e/test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "webrtc",
+    "video-sync",
+    "p2p",
+    "watch-together"
+  ],
+  "author": "Bruce",
+  "license": "Apache-2.0",
   "devDependencies": {
     "playwright": "^1.58.2"
   }
