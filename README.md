@@ -6,18 +6,20 @@
 
 ## 🚀 快速开始（30 秒上手）
 
-### macOS 用户：双击启动 ✨
-
-```bash
-# 在 Finder 中打开 ~/CodeProjects/syncplay/
-# 双击 start.command 即可
-```
-
-或者终端：
+### macOS / Linux 用户
 
 ```bash
 cd ~/CodeProjects/syncplay
 ./start.sh
+# 或双击 start.command
+```
+
+### Windows 用户
+
+```cmd
+cd path\to\syncplay
+start.bat
+# 或双击 start.bat
 ```
 
 **它会：**
@@ -28,7 +30,8 @@ cd ~/CodeProjects/syncplay
 5. ✅ 自动打开浏览器到 http://localhost:8080
 
 **关闭：**
-- 关闭启动脚本的终端窗口，或 `./stop.sh`
+- macOS / Linux：`.stop.sh` 或 Ctrl+C
+- Windows：双击 `stop.bat`
 
 ### 接下来
 
@@ -65,7 +68,8 @@ npm run test:e2e      # E2E 测试（需要 Chrome）
 
 ```
 syncplay/
-├── start.sh / start.command / stop.sh    # 🚀 一键启动（Mac 友好）
+├── start.sh / start.command / stop.sh    # 🚀 一键启动（macOS/Linux）
+├── start.bat / stop.bat                  # 🚀 一键启动（Windows）
 ├── README.md
 ├── LICENSE
 ├── package.json
