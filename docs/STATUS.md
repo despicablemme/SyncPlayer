@@ -3,14 +3,15 @@
 > **这是什么？** 项目的"进度快照"——当前版本、已完成、下一步。  
 > **何时查阅？** 每次回来接任务时**先看这个**。  
 > **关联文档：** [ROADMAP.md](./ROADMAP.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-06
+> **最后更新：** 2026-06-06 18:41
 
 ---
 
 ## 🚦 一句话状态
 
 **当前版本：v0.2.0**（已完成并发布）  
-**下一个目标：v1.0 — 互联网可用版**（规划已定，未启动开发）
+**下一个目标：v1.0 — 互联网可用版**  
+**当前阶段：Phase 1（SaaS TURN 跑通中）** — 规划已定，**等你提供 Metered 凭据**
 
 ---
 
@@ -22,6 +23,7 @@
 - 🏗️ **架构说明** → [ARCHITECTURE.md](./ARCHITECTURE.md)
 - 🔬 **技术调研** → [TECH_RESEARCH.md](./TECH_RESEARCH.md)
 - 📝 **会议纪要** → [MEETINGS.md](./MEETINGS.md)
+- 🗂 **文档索引** → [README.md](./README.md)
 
 ---
 
@@ -39,61 +41,47 @@
 - server.js 改造为 PeerJS 私有服务器
 - 视频格式支持扩展
 - Toast 通知、密码学安全房间号
-
-### 已知未解决（已记入 v1.0）
-- ~15% 网络环境 P2P 直连失败（需 TURN）
-- 移动端未适配
-- 信令服务器未公网部署
-- 自动化测试未跑通
+- 28 个单元测试覆盖核心同步逻辑
+- 一键启动脚本（Mac/Linux/Windows）
 
 ---
 
-## 🎯 v1.0 目标（规划中，未启动）
+## 🎯 v1.0 目标（规划中）
 
 **目标**：网页版 UI + **公网环境**（任何网络）播放 MP4 + 进度同步 — **实现方式不限**
 
-### P0 必做（不做不算 v1.0）
-- [ ] 打通公网连接（任选：TURN / 第三方 WebRTC 平台 / 纯 WebSocket）
-- [ ] 服务器公网部署 + HTTPS
-- [ ] 客户端配远程服务器
-- [ ] 公网端到端测试
+### 已确认决策（2026-06-06 18:41）
+- ✅ **公网方案 = TURN**（方案 A）
+- ✅ **Phase 1**：用 Metered SaaS（免费）跑通
+- ✅ **Phase 2**：自建 VPS 跑 coturn + 信令
+- ✅ 账号系统 v1.0 不做
+- ✅ 多人房间放 v2.0
 
-### 待决策（启动前需要确定）
-1. **公网打通方案**：A. TURN / B. LiveKit-Daily / C. 纯 WebSocket ⭐ 必须决策
-2. TURN 来源（选了 A 才有）：自建 coturn / 第三方 SaaS
-3. 部署位置：VPS / Cloudflare
-4. 多人房间是否进 v1.0
+### Phase 1 必做（不做不算 v1.0 MVP）
+- [ ] 注册 Metered 拿 TURN 凭据
+- [ ] 改 `src/client/app.js` 加 ICE_SERVERS
+- [ ] 跨网段实测两端同步
 
-详细路线图见 [ROADMAP.md](./ROADMAP.md)
-
-### P1 应做
-- [ ] 房间号 → 分享链接
-- [ ] 连接状态可视化（P2P / TURN / 失败）
-- [ ] 错误友好提示
-
-### P2 锦上添花
-- [ ] 移动端响应式
-- [ ] 视频两端文件校验
-- [ ] 重连后状态恢复
-
-### 待决策（启动前需要确定）
-1. TURN 方案：自建 coturn / 第三方 SaaS
-2. 公网部署：VPS / Cloudflare Workers+Tunnel
-3. 多人房间是否进 v1.0
+### Phase 2 应做（v1.0 正式版）
+- [ ] 租 VPS
+- [ ] 部署信令服务器（Docker compose）
+- [ ] 部署 coturn（Docker compose）
+- [ ] HTTPS 证书
+- [ ] 改 `app.js` 指向 VPS
+- [ ] 跨网段实测
 
 详细路线图见 [ROADMAP.md](./ROADMAP.md)
 
 ---
 
-## 🛠️ 当前可做的事
+## 🛠️ 当前可做的事（Phase 1）
 
 回到 syncplay 后，可以从以下任一项继续：
 
-1. **决策公网打通方案** ⭐ — 启动 v1.0 开发的第一个关卡
-2. 搭建本地 TURN 测试环境（方案 A）— 用 coturn 在本地 docker 跑
-3. 注册 LiveKit / Daily 账号试用（方案 B）
-4. 公网部署信令服务器 — 选 VPS / Cloudflare 之一
-5. 完善 v0.2 文档 — 截图、补 README、录 demo gif
+1. ⭐ **主人去 https://www.metered.ca 注册** —— 拿 TURN 凭据
+2. 我改 `src/client/app.js` —— 加 ICE_SERVERS 配置
+3. **跨网段实测** —— 找朋友或用 4G 热点测两端同步
+4. Phase 1 通过后——开始 Phase 2（租 VPS）
 
 ---
 
@@ -117,8 +105,13 @@
 |------|------|------|
 | 2026-03-22 | v0.1.0 | MVP 首发（项目立项） |
 | 2026-06-06 | v0.2.0 | 重构完成（同步 bug 修复、漂移校准、重连） |
-| 2026-06-06 | v0.2.0 → v1.0 | 决定 v1.0 目标，编写 ROADMAP.md |
-| TBD | v1.0 | 启动 v1.0 实际开发 |
+| 2026-06-06 | 规划 | 决定 v1.0 目标，文档结构建立 |
+| 2026-06-06 18:00 | 规划 | 加 v1.0 硬性要求 R1-R5 |
+| 2026-06-06 18:30 | 规划 | 选定方案 A（TURN）|
+| 2026-06-06 18:35 | 规划 | 7 个文档统一头部 + docs/README.md 索引 |
+| 2026-06-06 18:41 | 规划 | **两阶段路径确定**（Phase 1 SaaS → Phase 2 自建）|
+| TBD | v1.0 Phase 1 | SaaS TURN 跑通 |
+| TBD | v1.0 Phase 2 | 自建 VPS 部署 |
 
 ---
 

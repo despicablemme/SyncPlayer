@@ -7,6 +7,25 @@
 
 ---
 
+## [未发布] 2026-06-06 规划迭代
+
+### 文档
+- **REQUIREMENTS.md**：加 v1.0 硬性要求 R1-R5 + 场景剧本
+- **ROADMAP.md**：选定公网方案 A（TURN），定义两阶段实施路径（Phase 1 SaaS → Phase 2 自建）
+- **ARCHITECTURE.md**：架构聚焦"正在实现的系统"；部署图区分 Phase 1/2
+- **STATUS.md**：反映最新决策，明确当前可做的事
+- **新增 docs/README.md**：文档索引
+- 7 个文档统一头部说明（这是什么 / 何时查阅 / 关联文档 / 最后更新）
+- 顶层 README.md 加 "给新 session" 区块
+
+### 待实施
+- [ ] Phase 1：注册 Metered + 改 app.js 加 TURN + 跨网段实测
+- [ ] Phase 2：租 VPS + Docker 部署 + HTTPS
+
+---
+
+---
+
 ## [0.2.0] - 2026-06-06
 
 ### 🔄 重构
