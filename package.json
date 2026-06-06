@@ -1,0 +1,18 @@
+{
+  "name": "syncplay",
+  "version": "1.0.0",
+  "description": "> 视频同步播放工具 — 异地同步看片神器",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  }
+}
