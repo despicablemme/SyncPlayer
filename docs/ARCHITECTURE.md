@@ -1,8 +1,9 @@
 # SyncPlay 架构详解
 
-> **这是什么？** 软件架构的"地面真相"（ground truth）—— 描述我们**正在实现**的系统。  
-> 决策讨论/方案对比 → [ROADMAP.md](./ROADMAP.md)  
-> 最后更新：2026-06-06（v0.2 + v1.0 架构）
+> **这是什么？** 软件架构的"地面真相"——我们**正在实现**的系统长什么样。  
+> **何时查阅？** 实现新功能、改架构、debug 架构问题时。  
+> **关联文档：** [REQUIREMENTS.md](./REQUIREMENTS.md) · [ROADMAP.md](./ROADMAP.md) · [TECH_RESEARCH.md](./TECH_RESEARCH.md) · [README.md](./README.md)  
+> **最后更新：** 2026-06-06
 
 ---
 

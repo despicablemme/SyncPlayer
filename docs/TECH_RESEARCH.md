@@ -1,7 +1,9 @@
 # SyncPlay 技术调研报告
 
-> 调研日期：2026-03-22
-> 调研目的：评估 MVP 技术方案可行性
+> **这是什么？** 早期技术选型调研——为什么选 WebRTC / PeerJS / TURN，各方案对比。  
+> **何时查阅？** 想了解技术决策的历史背景、可选方案及其权衡时。  
+> **关联文档：** [ARCHITECTURE.md](./ARCHITECTURE.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
+> **最后更新：** 2026-03-22
 
 ---
 

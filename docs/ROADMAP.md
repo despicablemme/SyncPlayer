@@ -1,8 +1,9 @@
 # SyncPlay 项目路线图
 
-> **这是什么？** 回答"我们要往哪走、目标是什么"。  
-> 想看当前在哪个版本/已完成什么 → 看 [STATUS.md](./STATUS.md)  
-> 最后更新：2026-06-06
+> **这是什么？** 项目的"目标与决策中心"——要往哪走、为什么这么做、备选方案是什么。  
+> **何时查阅？** 想看方向、决策讨论、备选方案对比时。  
+> **关联文档：** [STATUS.md](./STATUS.md) · [REQUIREMENTS.md](./REQUIREMENTS.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [README.md](./README.md)  
+> **最后更新：** 2026-06-06
 
 ---
 

@@ -1,7 +1,9 @@
 # SyncPlay 项目需求文档
 
-> 视频同步播放工具 — 项目正式启动  
-> 最后更新：2026-06-06
+> **这是什么？** 系统要满足什么要求——v1.0 硬性要求 + 功能范围 + 排除项。  
+> **何时查阅？** 想看需求、验收标准、不能做什么时。  
+> **关联文档：** [ROADMAP.md](./ROADMAP.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [STATUS.md](./STATUS.md) · [README.md](./README.md)  
+> **最后更新：** 2026-06-06
 
 ---
 

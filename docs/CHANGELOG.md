@@ -1,10 +1,9 @@
 # Changelog
 
-SyncPlay 项目的版本迭代记录。
-
-> **关联文档**：
-> - 🎯 目标与路线图 → [ROADMAP.md](./ROADMAP.md)
-> - 🚦 当前状态与下一步 → [STATUS.md](./STATUS.md)
+> **这是什么？** 历史版本变更记录——每个版本改了什么、新增了什么。  
+> **何时查阅？** 想看项目演进、某个功能是哪个版本加的。  
+> **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
+> **最后更新：** 2026-06-06
 
 ---
 
