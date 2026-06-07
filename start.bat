@@ -10,6 +10,14 @@ REM   ASCII-only, no delayed expansion, no UTF-8
 REM   to avoid Chinese Windows encoding issues.
 REM ==========================================
 
+echo.
+echo ===================================
+echo   SyncPlay Launcher
+echo   Press any key to start...
+echo ===================================
+echo.
+pause >nul
+
 setlocal
 
 REM Script location and log directory
@@ -296,4 +304,4 @@ echo.
 echo (You can close this window - services keep running in background)
 echo (Log location: %LOG_DIR%\)
 echo.
-timeout /t 3 /nobreak >nul
+pause

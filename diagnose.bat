@@ -5,6 +5,14 @@ REM   ASCII-only, no delayed expansion, no UTF-8
 REM   Run: double-click diagnose.bat, copy output to developer
 REM ==========================================
 
+echo.
+echo ============================================================
+echo   SyncPlay Environment Diagnostic
+echo   Press any key to start...
+echo ============================================================
+echo.
+pause >nul
+
 setlocal
 echo.
 echo ============================================================
