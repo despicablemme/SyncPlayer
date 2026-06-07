@@ -147,6 +147,114 @@ P2P 直连失败（对称 NAT 等）：
 
 ---
 
+## 依赖清单 ⭐ 权威记录
+
+> **这是什么**：项目所有依赖的单一来源（single source of truth）。
+> **何时更新**：任何 `package.json` / 外部服务 / 运行环境的变更，**必须**同步更新此章节。
+> **位置选择原因**：ARCHITECTURE.md 是项目的"实现规格书"，依赖是实现的一部分，不单独立文档可避免双处维护。
+
+### 1. 运行环境（用户机器上必须装）
+
+| 依赖 | 版本 | 必需性 | Windows | Mac | Linux | 用途 |
+|------|------|--------|---------|-----|-------|------|
+| **Node.js** | >=16 | 运行 server | ✅ | ✅ | ✅ | 信令服务器运行时 |
+| **Python 3** | >=3.6 | 静态文件服务 | ✅ (叫 `python`) | ✅ (叫 `python3`) | ✅ (叫 `python3`) | 客户端静态服务 |
+| **Web 浏览器** | 现代版 | 客户端 | Edge/Chrome/FF | Safari/Chrome/FF | Chrome/FF | 跑 WebRTC + PeerJS |
+| **网络** | 任意 | TURN | ✅ | ✅ | ✅ | 连接 Metered 中继 |
+
+**Windows 特别注意**：
+- Python 命令名是 `python`（不是 `python3`）—— `start.bat` 已处理
+- Windows Defender 首次可能拦 Node 联网 —— 需要"允许"
+- 配置 TURN 凭据的 `config.local.js` **不入库**，Windows 上要重新创建
+
+### 2. 服务端 npm 依赖
+
+| 包 | 版本 | 必需 | 原生绑定 | 平台支持 | 用途 |
+|----|------|------|---------|---------|------|
+| `peer` | ^0.6.1 | ✅ | ❌ 纯 JS | 全平台 | PeerJS 信令服务器 |
+| `ws` | ^7.2.3 | 间接 | ❌ 纯 JS 模式运行 | 全平台 | WebSocket（peer 依赖） |
+| `express` | ^4.17.1 | 间接 | ❌ 纯 JS | 全平台 | HTTP 服务器（peer 依赖） |
+| `cors` | ^2.8.5 | 间接 | ❌ 纯 JS | 全平台 | 跨域（peer 依赖） |
+| `body-parser` | ^1.19.0 | 间接 | ❌ 纯 JS | 全平台 | 请求体解析（peer 依赖） |
+| `uuid` | ^3.4.0 | 间接 | ❌ 纯 JS | 全平台 | ID 生成（peer 依赖） |
+| `yargs` | ^15.3.1 | 间接 | ❌ 纯 JS | 全平台 | CLI 解析（peer 依赖） |
+
+**关键特性**：**零原生绑定**。`peer` 及其所有依赖都是纯 JS，`ws` 运行在纯 JS 模式（无 `build/` 目录），所以理论上任何能跑 Node 的平台都能跑（含 Windows）。
+
+### 3. 客户端运行时依赖
+
+| 资源 | 来源 | 必需性 | 加载时机 |
+|------|------|--------|---------|
+| **peerjs** | `https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js` | ✅ 必需 | 浏览器首次加载 `index.html` |
+| **Metered TURN** | `global.relay.metered.ca` | ✅ 必需 | WebRTC ICE 协商时 |
+| **PeerJS 公共服务器** | `0.peerjs.com:443` | Phase 1 默认 | 信令通道（Phase 2 改自建） |
+
+**客户端代码本身** = 纯 Web API（`RTCPeerConnection` / `window.crypto` / `document.*`），**零外部 JS 框架**，**零构建步骤**。
+
+### 4. 开发与测试依赖（仅开发者机器）
+
+| 包 | 版本 | 必需性 | 平台 | 用途 |
+|----|------|--------|------|------|
+| `playwright` | ^1.58.2 | devDep | 全平台 | e2e 测试 + ICE 冒烟测试 |
+
+**playwright 自带 Chromium**（已缓存于 `~/Library/Caches/ms-playwright/`），无需系统装 Chrome。
+
+### 5. 配置文件（不入库）
+
+| 文件 | 状态 | 内容 |
+|------|------|------|
+| `src/client/config.local.js` | 🚫 `.gitignore` 排除 | Metered TURN 真凭据 |
+| `src/client/config.template.js` | ✅ 入库 | 占位符示例 + 加载顺序说明 |
+| `start.sh` / `start.command` | ✅ 入库 | Mac/Linux 一键启动 |
+| `start.bat` / `stop.bat` | ✅ 入库 | Windows 一键启停 |
+| `stop.sh` | ✅ 入库 | Mac/Linux 一键关闭 |
+
+### 6. 跨平台支持矩阵
+
+| 组件 | Mac | Windows | Linux | 状态 |
+|------|-----|---------|-------|------|
+| 信令 server (`src/server/`) | ✅ | ✅ | ✅ | 纯 JS,无障碍 |
+| 客户端 (`src/client/`) | ✅ | ✅ | ✅ | 纯 Web,无障碍 |
+| 静态服务 (`python -m http.server`) | ✅ | ✅ | ✅ | 标准工具 |
+| TURN 凭据加载 | ✅ | ✅ | ✅ | config.local.js 模式 |
+| 一键启动脚本 | `start.command` | `start.bat` | `start.sh` | 三平台齐 |
+| 关闭脚本 | `stop.sh` | `stop.bat` | `stop.sh` | 三平台齐 |
+| Playwright 测试 | ✅ | ✅ | ✅ | 跨平台 |
+
+**结论：项目原生支持 Mac / Windows / Linux 三平台，无需任何代码修改。**
+
+### 7. 如何更新依赖（维护流程）
+
+**添加新依赖**：
+1. 先确认是否真的需要（参考 R1 一键启动原则）
+2. 评估是否引入原生绑定（避免）
+3. `npm install <pkg>` (server 端) 或 `npm install --save-dev <pkg>` (根目录)
+4. **同步更新本章节**（添加一行 + 更新"用途"说明）
+5. 提交 commit,确保 package-lock.json 一起入库
+
+**升级依赖**：
+1. 跑 `npm outdated` 看现状
+2. 评估 breaking change（看 changelog）
+3. 升级后**必须重跑 `npm run test`** + `npm run test:ice` + `npm run test:e2e`
+4. 同步更新本章节的版本号
+5. 提交
+
+**移除依赖**：
+1. `npm uninstall <pkg>`
+2. 检查 `package-lock.json` 是否清理
+3. 同步更新本章节
+4. 提交
+
+### 8. 依赖变更历史
+
+| 日期 | 变更 | commit | 更新人 |
+|------|------|--------|--------|
+| 2026-06-07 | 新增本章节，建立权威记录 | (本次) | Jarvis |
+| 2026-03-22 | v0.1.0 首发 | - | 主人 |
+| 2026-06-06 | v0.2.0 重构完成 | `19e524f` | 主人 |
+
+---
+
 ## 关键设计决策
 
 | 决策 | 选择 | 理由 |
@@ -222,4 +330,4 @@ P2P 直连失败（对称 NAT 等）：
 ---
 
 *作者：Jarvis*
-*最后更新：2026-06-06（v0.2 重构 + v1.0 架构 + Phase 1/2 部署）*
+*最后更新：2026-06-07（新增"依赖清单"章节，作为权威记录）*
