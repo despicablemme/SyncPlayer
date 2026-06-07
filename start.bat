@@ -134,11 +134,17 @@ echo       (安装时记得勾选 "Add Python to PATH")
 pause
 exit /b 1
 
-REM 刷新当前 shell 的 PATH(从注册表重读)
+REM 刷新当前 shell 的 PATH
+REM Win10 注册表 PATH 缓存有问题,所以除了重读注册表,还硬编码常见 node.js 安装位置
 :refresh_path
 for /f "tokens=2*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v PATH 2^>nul') do set "SYSTEM_PATH=%%a"
 for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v PATH 2^>nul') do set "USER_PATH=%%a"
 set "PATH=%SYSTEM_PATH%;%USER_PATH%;%PATH%"
+
+REM 硬编码 node.js 常见安装位置(winget 装后这些路径肯定存在)
+if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;%PATH%"
+if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;%PATH%"
+if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "PATH=%LOCALAPPDATA%\Programs\nodejs;%PATH%"
 exit /b 0
 
 REM wait_for_port PORT MAX_SECONDS
@@ -207,6 +213,17 @@ if not exist "%SCRIPT_DIR%src\server\node_modules" (
 REM ===== 5. 启动信令服务器 =====
 echo.
 echo [*] 启动信令服务器 ^(端口 9000^)...
+if not exist "%SCRIPT_DIR%src\server" (
+  echo.
+  echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  echo   [X] 找不到 src\server 目录
+  echo       脚本位置: %SCRIPT_DIR%
+  echo       请确认项目完整复制(含 src/ 整个子目录)
+  echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  echo.
+  pause
+  exit /b 1
+)
 pushd "%SCRIPT_DIR%src\server"
 start "SyncPlay-Server" /B cmd /c "npm start > "%LOG_DIR%\server.log" 2>&1"
 popd
@@ -218,7 +235,11 @@ if %errorlevel% neq 0 (
   echo       日志文件: %LOG_DIR%\server.log
   echo.
   echo   --- 日志内容 ---
-  type "%LOG_DIR%\server.log"
+  if exist "%LOG_DIR%\server.log" (
+    type "%LOG_DIR%\server.log"
+  ) else (
+    echo       ^(日志文件不存在,可能 server 未启动或路径问题^)
+  )
   echo   --- 日志结束 ---
   pause
   exit /b 1
@@ -228,6 +249,16 @@ echo   [OK] 信令服务器已启动 (port 9000)
 REM ===== 6. 启动客户端 =====
 REM 注意:HTTP 服务根目录是 src\(不是 client\),为了让 ../shared/ 路径能服务
 echo [*] 启动 Web 客户端 ^(端口 8080^)...
+if not exist "%SCRIPT_DIR%src" (
+  echo.
+  echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  echo   [X] 找不到 src 目录
+  echo       脚本位置: %SCRIPT_DIR%
+  echo   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  echo.
+  pause
+  exit /b 1
+)
 pushd "%SCRIPT_DIR%src"
 start "SyncPlay-Client" /B cmd /c "%PYTHON_CMD% -m http.server 8080 > "%LOG_DIR%\client.log" 2>&1"
 popd
@@ -239,7 +270,11 @@ if %errorlevel% neq 0 (
   echo       日志文件: %LOG_DIR%\client.log
   echo.
   echo   --- 日志内容 ---
-  type "%LOG_DIR%\client.log"
+  if exist "%LOG_DIR%\client.log" (
+    type "%LOG_DIR%\client.log"
+  ) else (
+    echo       ^(日志文件不存在,可能客户端未启动或路径问题^)
+  )
   echo   --- 日志结束 ---
   REM 清理:杀掉已起的 server
   for /f "tokens=5" %%a in ('netstat -ano ^| findstr :9000 ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
