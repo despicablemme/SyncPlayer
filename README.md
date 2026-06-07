@@ -2,6 +2,9 @@
 
 > 异地同步看片神器 — 两人异地同时播放同一视频，进度实时同步
 
+**当前版本:** v0.3.0 (TURN 中继 + Electron 打包启动)
+**上一版本:** v0.2.0
+
 ---
 
 ## 👋 给新 session / 新 agent
@@ -69,9 +72,13 @@ start.bat
 ## 🧪 运行测试
 
 ```bash
-npm test              # 单元测试
-npm run test:e2e      # E2E 测试（需要 Chrome）
+npm test              # 单元测试 (28 个,核心同步逻辑)
+npm run test:e2e      # E2E 测试 (需要本地 server)
+npm run test:ice      # TURN 凭据冒烟测试 (10s,验证 4 个 relay 候选)
+npm run test:room     # 创建房间回归测试 (防 HTTP server 根目录 bug 复发)
 ```
+
+需要诊断环境问题?`./diagnose.sh` (Mac/Linux) 或 `diagnose.bat` (Windows)
 
 ---
 
@@ -81,20 +88,28 @@ npm run test:e2e      # E2E 测试（需要 Chrome）
 syncplay/
 ├── start.sh / start.command / stop.sh    # 🚀 一键启动（macOS/Linux）
 ├── start.bat / stop.bat                  # 🚀 一键启动（Windows）
+├── diagnose.sh / diagnose.bat            # 🔍 一键环境诊断
 ├── README.md
 ├── LICENSE
 ├── package.json
 │
 ├── docs/                                  # 📚 文档
-│   ├── ARCHITECTURE.md / CHANGELOG.md / MEETINGS.md
-│   ├── REQUIREMENTS.md / ROADMAP.md / STATUS.md
-│   └── TECH_RESEARCH.md
+│   ├── ARCHITECTURE.md                    # 架构 + 依赖清单(权威)
+│   ├── CHANGELOG.md                       # 版本变更记录
+│   ├── MEETINGS.md                        # 会议纪要
+│   ├── REQUIREMENTS.md                    # 需求 R0-R5
+│   ├── ROADMAP.md                         # 路线图(v0.3 → v1.0)
+│   ├── STATUS.md                          # 当前进度
+│   ├── TECH_RESEARCH.md                   # 技术选型
+│   └── README.md                          # 文档索引
 │
 ├── src/                                   # 💻 源代码
-│   ├── shared/sync-engine.js              # 同步引擎（浏览器+Node 通用）
+│   ├── shared/sync-engine.js              # 同步引擎(浏览器+Node 通用)
 │   ├── client/                            # 客户端
-│   │   ├── index.html
-│   │   ├── app.js                         # UI 逻辑 + 连接管理
+│   │   ├── index.html                     # 主页 (http://localhost:8080/client/)
+│   │   ├── app.js                         # UI 逻辑 + 连接管理 + ICE config
+│   │   ├── config.template.js             # TURN 配置模板
+│   │   ├── config.local.js                # TURN 真凭据(本地,gitignore)
 │   │   ├── style.css
 │   │   └── test-video.mp4
 │   └── server/                            # PeerJS 信令服务器
@@ -103,7 +118,11 @@ syncplay/
 │
 └── test/                                  # 🧪 测试
     ├── unit/sync-engine.test.js           # 28 个单元测试
-    └── e2e/test.js                        # Playwright E2E
+    ├── e2e/test.js                        # Playwright E2E
+    └── network/                           # 🌐 网络/ICE 测试
+        ├── ice-smoke.js                   # TURN 凭据冒烟
+        ├── regression-create-room.js      # 创建房间回归
+        └── README.md
 ```
 
 ---
@@ -153,11 +172,22 @@ PEER_SECURE: true,
 
 ## ⚠️ 已知限制
 
-- **NAT 穿透**：约 85% 网络可 P2P 直连，剩余需 TURN 中继（v1.0 目标）
+- **NAT 穿透**：约 85% 网络可 P2P 直连，剩余需 TURN 中继(v0.3 已实现，凭据抽离到 config.local.js)
 - **视频文件**：两端必须选**同一个**文件
 - **测试**：E2E 测试在 headless Chrome 中 WebRTC 受限
+
+## 📦 v0.3 路线
+
+**当前阶段：v0.3 Electron 打包** — 详见 [ROADMAP.md](./docs/ROADMAP.md)
+
+预计产物:
+- Mac: `SyncPlay-0.3.0.dmg`
+- Windows: `SyncPlay Setup 0.3.0.exe`
+- Linux: `SyncPlay-0.3.0.AppImage`
+
+双击即用,代替 `./start.command` / `start.bat`。
 
 ---
 
 *项目维护：Jarvis & 主人*
-*最后更新：2026-06-06（v0.2.0）*
+*最后更新：2026-06-07（v0.3.0）*

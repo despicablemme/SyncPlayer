@@ -2,7 +2,7 @@
 
 > **这是什么？** 项目文档的**总入口**。  
 > 想知道"哪个文档看什么"——先看这个。  
-> 最后更新：2026-06-06
+> 最后更新：2026-06-07
 
 ---
 
@@ -35,21 +35,21 @@
 ## 🔀 文档关系图
 
 ```
-                    STATUS.md （当前状态）
+                    STATUS.md （当前状态,v0.3 进行中）
                     ┌────┴────┐
                     │         │
             ROADMAP.md      CHANGELOG.md
-           （目标/决策）    （历史变更）
+          （目标/决策）     （v0.3.0 已记录）
                     │         │
                     └────┬────┘
                          │
                   REQUIREMENTS.md
-                    （要做什么）
+                    （R0-R5 验收标准）
                          │
                          │ 实现
                          ▼
                   ARCHITECTURE.md
-                  （怎么实现）
+            （架构 + 依赖清单 ⭐ 权威记录）
 ```
 
 **阅读路径建议：**
@@ -66,12 +66,13 @@
 
 | 触发事件 | 更新哪个 |
 |---------|---------|
-| 完成一个版本 | CHANGELOG.md |
+| 完成一个版本 (e.g. v0.3.0) | CHANGELOG.md, STATUS.md, README.md |
 | 推进/完成某项任务 | STATUS.md |
-| 决定 v1.0 范围 | REQUIREMENTS.md, ROADMAP.md |
-| 架构有重大调整 | ARCHITECTURE.md |
-| 选型/技术调研 | TECH_RESEARCH.md |
-| 重大会议 | MEETINGS.md |
+| 决定下一版本范围 | ROADMAP.md |
+| 添加/修改/移除依赖 | ARCHITECTURE.md 依赖清单 |
+| 架构有重大调整 (e.g. 加 Electron) | ARCHITECTURE.md, ROADMAP.md |
+| 选型/技术调研 (e.g. Electron vs WebView2) | TECH_RESEARCH.md |
+| 重大会议/里程碑 | MEETINGS.md |
 
 ### 头部说明格式
 
@@ -87,6 +88,13 @@
 
 ---
 ```
+
+## 🆕 v0.3 新增内容
+
+- **依赖清单权威记录** — `ARCHITECTURE.md` 末尾,以后所有依赖变更都在这更新
+- **测试基础设施** — `test/network/`(ice-smoke + regression-create-room)
+- **一键诊断脚本** — `diagnose.sh` / `diagnose.bat`
+- **打包路线** — v0.3 出 Mac .dmg + Windows .exe,Electron + electron-builder
 
 ---
 

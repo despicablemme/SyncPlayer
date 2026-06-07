@@ -1,9 +1,65 @@
 # SyncPlay 技术调研报告
 
-> **这是什么？** 早期技术选型调研——为什么选 WebRTC / PeerJS / TURN，各方案对比。  
+> **这是什么？** 早期技术选型调研 + 后续技术决策的调研——为什么选 WebRTC / PeerJS / TURN / Electron，各方案对比。  
 > **何时查阅？** 想了解技术决策的历史背景、可选方案及其权衡时。  
-> **关联文档：** [ARCHITECTURE.md](./ARCHITECTURE.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
-> **最后更新：** 2026-03-22
+> **关联文档：** [ARCHITECTURE.md](./ARCHITECTURE.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md) · [CHANGELOG.md](./CHANGELOG.md)  
+> **最后更新：** 2026-06-07
+
+---
+
+## 五、v0.3 桌面打包调研(2026-06-07)
+
+### 需求
+- Mac + Windows + Linux 三平台出"双击即用"安装包
+- 当前是 start.sh / start.command / start.bat,需要"开窗口"体验
+- 朋友间分发,需简单
+
+### 方案对比
+
+| 方案 | 产物 | 体积 | 用户体验 | 跨平台 | 开发成本 | 推荐 |
+|------|------|------|---------|--------|---------|------|
+| 🅰️ **Electron + electron-builder** | 真正 .exe / .dmg / .AppImage | ~150MB | ⭐⭐⭐⭐⭐ 双击出窗口 | ✅✅✅ | 中(2-3 小时 MVP) | ⭐⭐⭐⭐⭐ |
+| 🅱️ **pkg + 系统 WebView** | server.exe + 手动开浏览器 | ~30MB | ⭐⭐⭐ 还要开浏览器 | ⚠️ Win 优先 | 低(2-3 小时) | ⭐⭐⭐ |
+| 🅲️ **Tauri (Rust + WebView)** | 真正 .exe / .dmg / .AppImage | ~10MB | ⭐⭐⭐⭐⭐ 接近 Electron | ✅✅✅ | 高(要学 Rust) | ⭐⭐⭐ (长期可考虑) |
+| 🅳️ **中性 zip** | .zip 解压 | ~5MB | ⭐⭐ 还要装 Node+Python | ✅ | 极低 | ⭐⭐ |
+
+### 为什么选 Electron
+
+**优点**:
+- 真正"单文件"体验(像 VSCode/Discord/微信)
+- 跨平台统一一套代码(Mac/Windows/Linux)
+- 生态成熟:`electron-builder` 配 Windows 代码签名、auto-update、GitHub Releases 都是现成
+- Mac 上能直接出包(现在就能验证)
+- 已经是主流桌面 app 模式,用户认知度高
+
+**缺点接受**:
+- ~150MB 体积(Chromium 占比 90%)
+- 内存占用比 Tauri 大
+
+**对比 Tauri(未来可考虑)**:
+- Tauri 用 Rust 后端 + 系统 WebView,体积可压到 ~10MB
+- 但需要学 Rust,生态没 Electron 成熟
+- **v0.3 选 Electron 跑通,未来 v3.0 可考虑迁移到 Tauri**
+
+### 选 Electron 的具体技术细节
+
+**main 进程职责**:
+- 起 Node.js 子进程(信令 server)
+- 创建 BrowserWindow 加载 client/index.html
+- 监听子进程退出,主进程清理
+- (v0.3 Phase B) 提供 IPC 让 renderer 读写 TURN 凭据
+
+**preload 脚本**:
+- contextBridge 暴露安全 API 给 renderer
+- 不直接暴露 Node API
+- 保持 Electron 安全模型
+
+**electron-builder 配置**:
+- Mac: `dmg` (NSIS DMG)
+- Windows: `nsis` (NSIS installer)
+- Linux: `AppImage`
+- file 包含 src/ + main.js + preload.js
+- 排除 node_modules(用 asar 打包)
 
 ---
 
@@ -143,4 +199,5 @@ peer.on('connection', (conn) => {
 
 ---
 
-*调研人：Jarvis*
+*调研人：Jarvis*  
+*更新：v0.3 加入 Electron 桌面打包调研(2026-06-07)*

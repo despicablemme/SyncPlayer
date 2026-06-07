@@ -3,7 +3,144 @@
 > **这是什么？** 早期项目会议讨论记录——项目启动、需求、技术选型等历史讨论。  
 > **何时查阅？** 想了解项目最初是怎么启动的、哪些决策是在什么会议上定的。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-06
+> **最后更新：** 2026-06-07
+
+---
+
+## 会议 #003 — 2026-06-07 v0.3 TURN 中继实现 + Electron 打包启动
+
+**参会人员**：主人（Bruce）、Jarvis  
+**主题**：从 v0.2 重构到 v0.3 TURN 中继 + Electron 打包的多轮讨论（20+ 轮对话）  
+**耗时**：约 6 小时，含 TURN 验证、依赖重构、启动脚本加固、Win10 调试、v0.3 发版
+
+### 一、TURN 中继实现
+
+**讨论过程**:
+- 主人注册 Metered 拿 TURN 凭据(username/credential)
+- 决定凭据抽离:`config.local.js` + `.gitignore`,避免敏感信息入 git
+- 写 `config.template.js` 给非本地协作者参考
+- 改 `app.js` 加 `iceServers` 配置 + 强制 `iceTransportPolicy` 测试
+
+**关键技术点**:
+- 凭据从 `__TURN_USERNAME__` / `__TURN_CREDENTIAL__` 占位符改为真值
+- 加 `iceTransportPolicy: 'all'` 默认(优先 host,失败 fallback TURN)
+- 临时改 `'relay'` 强制走 TURN,验证同步数据真在中继上 — **验证通过**(data-channel `state=open`)
+
+### 二、测试基础设施
+
+**新建 `test/network/`**:
+- `ice-smoke.js` — TURN 凭据冒烟,headless Chromium + 4 个 relay 候选生成
+- `regression-create-room.js` — 创建房间回归(防 HTTP server 根目录 bug 复发)
+- `README.md` — 解释 test/network/ vs test/unit/ vs test/e2e/ 的关系
+- `package.json` 加 `test:ice` 和 `test:room` scripts
+
+**结果**:ice-smoke 一次跑通,4 个 relay 候选全部从 Metered 158.247.200.82 成功分配
+
+### 三、依赖重构与 HTTP Server 根目录 Bug
+
+**主人发现**:点"创建房间"无任何响应
+
+**Debug 过程**:
+- 用 playwright 复现,看到 `SyncEngine is not a constructor` 错误
+- 查 `app.js` 第 106 行,`SyncEngine` 在 `window.SyncPlay` 上找不到
+- 根因:`start.sh` 启 Python http.server 在 `src/client/`,但 `index.html` 引用 `../shared/sync-engine.js`
+- Python http.server 出于安全拦截 `..` 路径,导致 sync-engine.js 永远 404
+- 这是 v0.2.0 一直埋的 bug
+
+**修复**(commit 936fada):
+- start.sh/command/bat: HTTP server 根目录从 `src/client/` 改 `src/`
+- 主页 URL 从 `http://localhost:8080` 改 `http://localhost:8080/client/`
+- test/e2e/test.js 同步修正
+- 所有文档 URL 同步更新
+
+### 四、启动脚本加固
+
+**主人要求**:不要让人手动装环境
+
+**改动**:
+- start.sh/command 加 `ensure_node()` + `ensure_python()` 函数
+  - Mac: `brew install` → NVM 兜底
+- start.bat 加 `:ensure_node` + `:ensure_python` 标签
+  - Windows: `winget install` → `choco install` 兜底
+  - 加 `:refresh_path` 标签(从注册表重读 PATH)
+- 健康检查加 `wait_for_port`(10s 超时轮询端口)
+- Win10 PATH 刷新修复(硬编码 3 个常见 node.js 安装位置)
+- 路径检查(`if not exist`)防止 pushd 静默失败
+
+### 五、Win10 PC 调试
+
+**主人报告**:在另一台 Win10 PC 上跑 start.bat,失败
+
+**调查过程**:
+- 检查发现主人复制的是整个项目,但仍有路径问题
+- Win10 注册表 PATH 缓存有怪行为,我的 :refresh_path 不可靠
+- 加上 Win10 中文系统编码 + chcp 65001 + `!` 字符触发延迟展开,3 个东西互打架
+- 症状:`'[X]'` `'_FOUND'` `'/f'` 等被切碎当命令
+
+**修复**:
+- 删 `chcp 65001` + `setlocal enabledelayedexpansion` + 中文 + `!!!!` 装饰
+- 改全 ASCII、纯英文、简单 `if` 嵌套
+- 脚本开头加 `pause` 让用户必看到 prompt
+
+**遗留**:Win10 PC 上 start.bat 仍有问题(诊断脚本 diagnose.bat 帮忙定位),但主人决定**先跳过,聚焦 v0.3 发版和 Electron 打包**
+
+### 六、依赖清单权威章节
+
+**主人要求**:所有依赖写进 ARCHITECTURE.md 文档,以后在这里维护
+
+**新增** ARCHITECTURE.md 末尾 8 子章节:
+- 运行环境 / npm deps / 客户端 deps / devDeps / 配置文件 / 跨平台矩阵 / 维护流程 / 变更历史
+- 明确为 single source of truth,任何依赖变更必须同步更新此处
+- 跨平台矩阵总结:零原生绑定,Mac/Windows/Linux 原生支持
+
+### 七、v0.3 发版
+
+**升级** 0.2.0 → 0.3.0:
+- 根 package.json version 0.2.0 → 0.3.0
+- CHANGELOG.md 加 v0.3.0 完整条目(TURN/测试/启动脚本/诊断/修复/文档 6 大类)
+- STATUS.md 更新当前阶段为 v0.3 Electron 打包
+- ROADMAP.md 加 v0.3 路线和 Electron 选型
+- git tag v0.3.0 本地标记(等主人推送)
+
+### 八、v0.3 Electron 打包启动(即将进行)
+
+**讨论方案**:
+- 🅰️ Electron + electron-builder(主人选,跨平台统一,~150MB)
+- 🅱️ pkg + WebView2(~50MB,Win 优先)
+- 🅲️ Tauri(Rust,长期可考虑)
+
+**计划**:
+- Phase A MVP:desktop/ 目录 + main.js + electron-builder 配置(2-3 小时)
+- Phase B 体验:TURN 凭据 UI + 跨网段 UX(半天)
+- Phase C 发布:代码签名 + 自动更新(1-2 天)
+
+### 九、主人教我的事(MEMORY.md 累积)
+
+1. **用户要求必须立刻写入文件** (#1)
+2. **安装前必须申请许可** (#2)
+3. **金钱交易零容忍** (#3)
+4. **不准随意卸载** (#5)
+5. **角色:领导者 + 任务发布者** (#6)
+6. **知识库优先检索** (#7)
+7. **TTS 任务交给子 agent** (#8)
+8. **子 agent 处理所有任务** (#9)
+9. **检查定时任务用 openclaw cron list** (#10)
+10. **Skill 统一放 workspace** (#11)
+11. **耗时操作必须发子 agent** (#12)
+12. **处理问题先查证再回复** (#13)
+13. **求证必须有切实证据** (#14)
+14. **纠错写入持久文件** (#15,17)
+15. **优先用一键脚本** (#15)
+16. **路径里 `..` 别想当然** (#16)
+17. **Python http.server 拦截 `..` 路径** (#17)
+18. **别在 SMB / UNC 路径跑 Python/Node** (#18)
+19. **edit 工具可能改坏文件标点** (#19)
+
+### 十、本次新教训
+
+- **JavaScript 在 Win 编码坑**:UTF-8 中文 + chcp 65001 + setlocal enabledelayedexpansion 三者不能同时用
+- **`!` 字符在批处理陷阱**:作字符串用必须用 `^^!` 转义,否则触发延迟展开
+- **pushd 静默失败**:Windows 批处理不报 pushd 错误,必须 `if not exist` 提前验证
 
 ---
 
