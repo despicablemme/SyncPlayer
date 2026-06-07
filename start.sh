@@ -42,27 +42,93 @@ cleanup() {
 
 trap cleanup INT TERM
 
+# ============ 自动安装辅助函数 ============
+# 如果某个工具没装,尝试用包管理器装
+# 全部失败才打印手动安装说明 + 退出
+
+# ensure_node: 检查 Node.js,缺失则自动装
+ensure_node() {
+  if command -v node &> /dev/null; then
+    echo "  ✅ Node.js $(node --version)"
+    return 0
+  fi
+
+  echo -e "${YELLOW}  ⚠️  Node.js 未安装,尝试自动安装...${NC}"
+
+  # 方案 1: Homebrew(Mac 推荐)
+  if command -v brew &> /dev/null; then
+    echo -e "${BLUE}  → 用 Homebrew 安装 Node.js...${NC}"
+    if brew install node 2>&1 | tail -10; then
+      if command -v node &> /dev/null; then
+        echo -e "${GREEN}  ✅ Node.js $(node --version) 已通过 Homebrew 安装${NC}"
+        return 0
+      fi
+    fi
+    echo -e "${YELLOW}  ⚠️  Homebrew 安装未生效,换 NVM...${NC}"
+  fi
+
+  # 方案 2: NVM(无需 Homebrew,任何 unix 都能用)
+  echo -e "${BLUE}  → 装 NVM + Node.js LTS...${NC}"
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh 2>/dev/null | bash > /dev/null 2>&1
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+  if command -v nvm &> /dev/null; then
+    nvm install --lts > /dev/null 2>&1
+    nvm use --lts > /dev/null 2>&1
+    if command -v node &> /dev/null; then
+      echo -e "${GREEN}  ✅ Node.js $(node --version) 已通过 NVM 安装${NC}"
+      return 0
+    fi
+  fi
+
+  # 全部失败
+  echo -e "${RED}  ❌ 自动安装失败${NC}"
+  echo "  请手动安装:"
+  echo "    1) 访问 https://nodejs.org/ 下载安装包"
+  echo "    2) 或装 Homebrew(https://brew.sh/)后 brew install node"
+  return 1
+}
+
+# ensure_python: 检查 Python3,缺失则自动装
+ensure_python() {
+  if command -v python3 &> /dev/null; then
+    echo "  ✅ Python3 $(python3 --version 2>&1 | awk '{print $2}')"
+    return 0
+  fi
+
+  echo -e "${YELLOW}  ⚠️  Python3 未安装,尝试自动安装...${NC}"
+
+  # 方案 1: Homebrew
+  if command -v brew &> /dev/null; then
+    echo -e "${BLUE}  → 用 Homebrew 安装 Python3...${NC}"
+    if brew install python 2>&1 | tail -5; then
+      if command -v python3 &> /dev/null; then
+        echo -e "${GREEN}  ✅ Python3 已通过 Homebrew 安装${NC}"
+        return 0
+      fi
+    fi
+  fi
+
+  # 全部失败(Mac 没 Homebrew 基本只能手动装)
+  echo -e "${RED}  ❌ 自动安装失败${NC}"
+  echo "  请手动安装:"
+  echo "    1) 访问 https://www.python.org/downloads/macos/"
+  echo "    2) 或装 Homebrew(https://brew.sh/)后 brew install python"
+  return 1
+}
+
 echo ""
 echo -e "${BLUE}🎬 SyncPlay - 一键启动${NC}"
 echo "================================="
 echo ""
 
-# ===== 1. 环境检查 =====
+# ===== 1. 环境检查 + 自动安装 =====
 echo -e "${BLUE}🔍 检查环境...${NC}"
 
-if ! command -v node &> /dev/null; then
-  echo -e "${RED}❌ Node.js 未安装${NC}"
-  echo "   请访问 https://nodejs.org/ 安装"
-  exit 1
-fi
-echo "  ✅ Node.js $(node --version)"
-
-if ! command -v python3 &> /dev/null; then
-  echo -e "${RED}❌ Python3 未安装${NC}"
-  echo "   macOS: brew install python3"
-  exit 1
-fi
-echo "  ✅ Python3 $(python3 --version | awk '{print $2}')"
+ensure_node || exit 1
+ensure_python || exit 1
 
 # ===== 2. 端口检查 =====
 if lsof -iTCP:$SERVER_PORT -sTCP:LISTEN &> /dev/null; then

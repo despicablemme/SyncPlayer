@@ -20,33 +20,149 @@ set "SCRIPT_DIR=%~dp0"
 set "LOG_DIR=%TEMP%\syncplay"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
-REM ===== 1. Node 检查 =====
-where node >nul 2>&1
-if %errorlevel% neq 0 (
-  echo [X] Node.js 未安装
-  echo     请访问 https://nodejs.org/ 安装
-  pause
-  exit /b 1
-)
-for /f "delims=" %%v in ('node --version') do echo   [OK] Node.js %%v
+REM ============ 自动安装辅助函数 ============
+REM 检测到环境丢失,尝试用包管理器装:winget(优先) -> choco(兑底) -> 手动
+REM 全部失败才退出
 
-REM ===== 2. Python 检查 =====
-set "PYTHON_CMD="
-where python >nul 2>&1
+REM 跳到错信息标签(变量不像函数能 return,用 goto 模拟)
+goto :main_start
+
+REM --- Node.js 安装 ---
+:ensure_node
+where node >nul 2>&1
 if %errorlevel% equ 0 (
-  set "PYTHON_CMD=python"
+  for /f "delims=" %%v in ('node --version') do echo   [OK] Node.js %%v
+  exit /b 0
+)
+
+echo   [!] Node.js 未安装,尝试自动安装...
+
+REM 方案 1: winget (Win 10/11 自带)
+where winget >nul 2>&1
+if %errorlevel% equ 0 (
+  echo   [...] 用 winget 安装 Node.js LTS...
+  winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+  if %errorlevel% equ 0 (
+    REM 刷新 PATH 以让当前 shell 找到 node
+    call :refresh_path
+    where node >nul 2>&1
+    if %errorlevel% equ 0 (
+      for /f "delims=" %%v in ('node --version') do echo   [OK] Node.js %%v
+      exit /b 0
+    )
+  )
+)
+
+REM 方案 2: Chocolatey
+where choco >nul 2>&1
+if %errorlevel% equ 0 (
+  echo   [...] 用 Chocolatey 安装 Node.js LTS...
+  choco install nodejs-lts -y
+  if %errorlevel% equ 0 (
+    call :refresh_path
+    where node >nul 2>&1
+    if %errorlevel% equ 0 (
+      for /f "delims=" %%v in ('node --version') do echo   [OK] Node.js %%v
+      exit /b 0
+    )
+  )
+)
+
+REM 全部失败
+echo   [X] 自动安装失败
+echo       请手动安装: https://nodejs.org/
+echo       (下载 LTS 版本,运行安装包,默认选项即可)
+pause
+exit /b 1
+
+REM --- Python 安装 ---
+:ensure_python
+set "PYTHON_CMD="
+where python3 >nul 2>&1
+if %errorlevel% equ 0 (
+  set "PYTHON_CMD=python3"
 ) else (
-  where python3 >nul 2>&1
-  if %errorlevel% equ 0 set "PYTHON_CMD=python3"
+  where python >nul 2>&1
+  if %errorlevel% equ 0 set "PYTHON_CMD=python"
 )
-if not defined PYTHON_CMD (
-  echo [X] Python 未安装
-  echo     请访问 https://www.python.org/ 安装
-  echo     安装时记得勾选 "Add Python to PATH"
-  pause
-  exit /b 1
+if defined PYTHON_CMD (
+  for /f "delims=" %%v in ('%PYTHON_CMD% --version 2^>^&1') do echo   [OK] Python %%v
+  exit /b 0
 )
-for /f "delims=" %%v in ('%PYTHON_CMD% --version 2^>^&1') do echo   [OK] Python %%v
+
+echo   [!] Python 未安装,尝试自动安装...
+
+where winget >nul 2>&1
+if %errorlevel% equ 0 (
+  echo   [...] 用 winget 安装 Python...
+  winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+  if %errorlevel% equ 0 (
+    call :refresh_path
+    set "PYTHON_CMD="
+    where python3 >nul 2>&1
+    if %errorlevel% equ 0 set "PYTHON_CMD=python3"
+    where python >nul 2>&1
+    if %errorlevel% equ 0 if not defined PYTHON_CMD set "PYTHON_CMD=python"
+    if defined PYTHON_CMD (
+      for /f "delims=" %%v in ('%PYTHON_CMD% --version 2^>^&1') do echo   [OK] Python %%v
+      exit /b 0
+    )
+  )
+)
+
+where choco >nul 2>&1
+if %errorlevel% equ 0 (
+  echo   [...] 用 Chocolatey 安装 Python...
+  choco install python -y
+  if %errorlevel% equ 0 (
+    call :refresh_path
+    set "PYTHON_CMD="
+    where python3 >nul 2>&1
+    if %errorlevel% equ 0 set "PYTHON_CMD=python3"
+    where python >nul 2>&1
+    if %errorlevel% equ 0 if not defined PYTHON_CMD set "PYTHON_CMD=python"
+    if defined PYTHON_CMD (
+      for /f "delims=" %%v in ('%PYTHON_CMD% --version 2^>^&1') do echo   [OK] Python %%v
+      exit /b 0
+    )
+  )
+)
+
+echo   [X] 自动安装失败
+echo       请手动安装: https://www.python.org/downloads/windows/
+echo       (安装时记得勾选 "Add Python to PATH")
+pause
+exit /b 1
+
+REM 刷新当前 shell 的 PATH(从注册表重读)
+:refresh_path
+for /f "tokens=2*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v PATH 2^>nul') do set "SYSTEM_PATH=%%a"
+for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v PATH 2^>nul') do set "USER_PATH=%%a"
+set "PATH=%SYSTEM_PATH%;%USER_PATH%;%PATH%"
+exit /b 0
+
+:main_start
+echo.
+echo ===================================
+echo  [OK] SyncPlay - 一键启动
+echo ===================================
+echo.
+
+REM ===== 1. Node 检查 + 自动安装 =====
+echo [Check] 检查 Node.js...
+call :ensure_node
+if %errorlevel% neq 0 exit /b 1
+
+REM ===== 2. Python 检查 + 自动安装 =====
+echo [Check] 检查 Python...
+set "PYTHON_CMD="
+call :ensure_python
+if %errorlevel% neq 0 exit /b 1
+REM 确保 PYTHON_CMD 被设置(从 ensure_python 返回后应该已有)
+where python3 >nul 2>&1
+if %errorlevel% equ 0 set "PYTHON_CMD=python3"
+where python >nul 2>&1
+if %errorlevel% equ 0 if not defined PYTHON_CMD set "PYTHON_CMD=python"
 
 REM ===== 3. 清理已占用端口 =====
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :9000 ^| findstr LISTENING') do (
