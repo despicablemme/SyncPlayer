@@ -50,6 +50,9 @@
     </div>
   </div>
 
+  <!-- TURN/STUN 配置(顺序很重要:local 优先,template 兜底) -->
+  <script src="config.local.js"></script>      <!-- 404 时浏览器继续,fallback 到 template -->
+  <script src="config.template.js"></script>  <!-- 默认占位符 -->
   <script src="../shared/sync-engine.js"></script>
   <script src="app.js"></script>
 </body>

@@ -28,3 +28,6 @@ playwright-report/
 .env
 .env.local
 .env.*.local
+
+# SyncPlay 本地 TURN 凭据(config.template.js 的覆盖版)
+src/client/config.local.js

@@ -20,6 +20,20 @@
     MAX_RECONNECT_ATTEMPTS: 5,
   };
 
+  // ============ ICE 服务器配置 ============
+  // 📌 加载顺序(config 文件必须在 app.js 之前):
+  //    1. config.local.js   (git 忽略,放真凭据,可选)
+  //    2. config.template.js (占位符,必备)
+  //    3. app.js            (本文件,读 window.SYNCPLAY_ICE_SERVERS)
+  // 📌 如果两个 config 文件都加载失败(理论不应发生),用最后的兜底占位符
+  //    这种情况下 TURN 中继不会工作,只能 STUN 直连。
+  const ICE_SERVERS = window.SYNCPLAY_ICE_SERVERS || [
+    { urls: 'stun:global.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80',  username: '__TURN_USERNAME__', credential: '__TURN_CREDENTIAL__' },
+    { urls: 'turn:global.relay.metered.ca:443', username: '__TURN_USERNAME__', credential: '__TURN_CREDENTIAL__' },
+    { urls: 'turns:global.relay.metered.ca:443', username: '__TURN_USERNAME__', credential: '__TURN_CREDENTIAL__' },
+  ];
+
   // ============ 工具函数 ============
 
   /** 用 crypto 生成房间号（密码学安全） */
@@ -82,6 +96,10 @@
         path: CONFIG.PEER_PATH,
         secure: CONFIG.PEER_SECURE,
         debug: 1,
+        config: {
+          iceServers: ICE_SERVERS,
+          iceTransportPolicy: 'all',  // 'all' 允许 TURN 中继，'relay' 强制中继
+        },
       };
 
       this.peer = new Peer(this.myPeerId, peerOpts);
