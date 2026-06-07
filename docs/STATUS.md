@@ -9,9 +9,10 @@
 
 ## 🚦 一句话状态
 
-**当前版本：v0.2.0**（已完成并发布）  
-**下一个目标：v1.0 — 互联网可用版**  
-**当前阶段：Phase 1（SaaS TURN 跑通中）** — 规划已定，**等你提供 Metered 凭据**
+**当前版本：v0.3.0**（进行中 — Electron 打包阶段）  
+**上一版本：v0.2.0**（已发布，Phase 1 TURN 中继跑通）  
+**下一个目标：v1.0 — 互联网可用版（云端自部署）**  
+**当前阶段：v0.3 Electron 打包** — MVP 启服务/调窗口，跨平台出可执行文件
 
 ---
 
@@ -24,6 +25,30 @@
 - 🔬 **技术调研** → [TECH_RESEARCH.md](./TECH_RESEARCH.md)
 - 📝 **会议纪要** → [MEETINGS.md](./MEETINGS.md)
 - 🗂 **文档索引** → [README.md](./README.md)
+
+---
+
+## ✅ v0.3.0 进行中
+
+### MVP (首期必出)
+- [ ] `desktop/` 目录创建 + main.js + preload.js
+- [ ] `electron-builder` 配置（Mac .dmg + Windows .exe + Linux .AppImage）
+- [ ] 本地出 Mac .dmg 验证
+
+### 二期 (体验优化)
+- [ ] TURN 凭据管理 UI（避免手改 config.local.js）
+- [ ] 跨网段 UX 优化（分享链接 + TURN 状态指示器）
+
+### 三期 (发布)
+- [ ] 代码签名（消除 SmartScreen 警告）
+- [ ] 自动更新通道
+- [ ] GitHub Releases 发 .exe
+
+### 预计产物
+- `desktop/dist/SyncPlay-0.3.0.dmg`（Mac）
+- `desktop/dist/SyncPlay Setup 0.3.0.exe`（Windows）
+- `desktop/dist/SyncPlay-0.3.0.AppImage`（Linux）
+- 预计体积：~150MB（Chromium 占比 90%）
 
 ---
 
@@ -89,13 +114,13 @@
 
 ```
 ~/CodeProjects/syncplay/
-├── 状态: git clean, main 分支与 origin/main 同步
+├── 状态: git clean (除 v0.3.0 本地 commits)
 ├── 远程: https://github.com/despicablemme/SyncPlayer
-├── 依赖: client 无构建（纯静态）, server 需 npm install
+├── 依赖: client 无构建(纯静态), server 需 npm install, 未来 desktop 需 electron
 └── 启动:
-    - 客户端: cd src && python3 -m http.server 8080  (← 注意根目录是 src/)
-    - 主页:   http://localhost:8080/client/
-    - 服务端: cd src/server && npm install && npm start
+    - 开发模式: ./start.command (Mac) / start.bat (Win)
+    - 诊断模式: ./diagnose.sh (Mac) / diagnose.bat (Win)
+    - v0.3 后: 打包好的 .dmg / .exe / .AppImage 双击即用
 ```
 
 ---
@@ -104,15 +129,19 @@
 
 | 日期 | 版本 | 事件 |
 |------|------|------|
-| 2026-03-22 | v0.1.0 | MVP 首发（项目立项） |
-| 2026-06-06 | v0.2.0 | 重构完成（同步 bug 修复、漂移校准、重连） |
-| 2026-06-06 | 规划 | 决定 v1.0 目标，文档结构建立 |
+| 2026-03-22 | v0.1.0 | MVP 首发(项目立项) |
+| 2026-06-06 | v0.2.0 | 重构完成(同步 bug 修复、漂移校准、重连) |
+| 2026-06-06 | 规划 | 决定 v1.0 目标,文档结构建立 |
 | 2026-06-06 18:00 | 规划 | 加 v1.0 硬性要求 R1-R5 |
-| 2026-06-06 18:30 | 规划 | 选定方案 A（TURN）|
-| 2026-06-06 18:35 | 规划 | 7 个文档统一头部 + docs/README.md 索引 |
-| 2026-06-06 18:41 | 规划 | **两阶段路径确定**（Phase 1 SaaS → Phase 2 自建）|
-| TBD | v1.0 Phase 1 | SaaS TURN 跑通 |
-| TBD | v1.0 Phase 2 | 自建 VPS 部署 |
+| 2026-06-06 18:30 | 规划 | 选定方案 A(TURN) |
+| 2026-06-06 18:41 | 规划 | **两阶段路径确定**(Phase 1 SaaS → Phase 2 自建) |
+| 2026-06-07 | **v0.3.0** | TURN 中继实现 + 测试基础设施 + 启动脚本加固 + Electron 打包启动 |
+| 2026-06-07 | v0.3 测试 | 4 个 relay 候选生成成功;强制 relay 模式验证同步走 TURN |
+| 2026-06-07 | v0.3 文档 | ARCHITECTURE.md 依赖清单权威记录;所有 URL 同步 |
+| TBD | v0.3 MVP | desktop/ 目录 + electron-builder + 出 .dmg/.exe |
+| TBD | v0.3 二期 | TURN 凭据 UI + 跨网段 UX |
+| TBD | v0.3 三期 | 代码签名 + 自动更新 + GitHub Releases |
+| TBD | v1.0 | 云端自部署 + 正式版 |
 
 ---
 

@@ -3,26 +3,81 @@
 > **这是什么？** 历史版本变更记录——每个版本改了什么、新增了什么。  
 > **何时查阅？** 想看项目演进、某个功能是哪个版本加的。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-06
+> **最后更新：** 2026-06-07
 
 ---
 
-## [未发布] 2026-06-06 规划迭代
-
-### 文档
-- **REQUIREMENTS.md**：加 v1.0 硬性要求 R1-R5 + 场景剧本
-- **ROADMAP.md**：选定公网方案 A（TURN），定义两阶段实施路径（Phase 1 SaaS → Phase 2 自建）
-- **ARCHITECTURE.md**：架构聚焦"正在实现的系统"；部署图区分 Phase 1/2
-- **STATUS.md**：反映最新决策，明确当前可做的事
-- **新增 docs/README.md**：文档索引
-- 7 个文档统一头部说明（这是什么 / 何时查阅 / 关联文档 / 最后更新）
-- 顶层 README.md 加 "给新 session" 区块
+## [未发布]
 
 ### 待实施
-- [ ] Phase 1：注册 Metered + 改 app.js 加 TURN + 跨网段实测
-- [ ] Phase 2：租 VPS + Docker 部署 + HTTPS
+- [ ] v0.3 后期：Electron TURN 凭据管理 UI
+- [ ] v0.3 后期：跨网段 UX 优化(分享链接 + TURN 状态指示器)
+- [ ] v1.0：代码签名 + 自动更新 + 商店发布
 
 ---
+
+## [0.3.0] - 2026-06-07
+
+### 🌐 TURN 中继支持 (Phase 1 核心)
+
+- **`src/client/app.js`**：加 ICE 服务器配置(`iceServers` + `iceTransportPolicy`)
+- **TURN 凭据抽离**到 `config.local.js`（gitignore），避免敏感信息泄露
+- **新增** `src/client/config.template.js`：占位符模板 + 加载顺序说明
+- **强制 TURN 模式验证**：临时改 `'all'` → `'relay'` 验证同步数据真走中继（已验证通过）
+- **TURN 凭据冒烟测试**（`test:ice`）：headless Chromium + 4 个 relay 候选从 Metered 成功分配
+
+### 🧪 测试基础设施
+
+- **新增** `test/network/ice-smoke.js`：TURN 凭据 + relay 候选生成验证
+- **新增** `test/network/regression-create-room.js`：点"创建房间"应显示房间号（防 HTTP server 根目录 bug 复发）
+- **新增** `test/network/README.md`：network/ vs unit/ vs e2e/ 测试关系说明
+- `package.json` 加 `test:ice` 和 `test:room` 脚本
+- `test/e2e/test.js` 同步修正 HTTP server 根目录 bug
+
+### 🚀 启动脚本加固
+
+- **start.sh / start.command / start.bat**：检测到缺 Node/Python 自动安装
+  - Mac：`brew install` → NVM
+  - Windows：`winget` → `choco`
+- **健康检查**：启服务后必须端口真在监听才打 OK（10s 超时）
+  - bash 函数 `wait_for_port`（轮询 lsof）
+  - bat 标签 `:wait_for_port`（轮询 netstat）
+- **Win10 PATH 刷新修复**：硬编码 3 个常见 node.js 安装位置
+- **路径检查**：启动前 if exist 验证目录，日志输出前 if exist 避免连锁错误
+- **错误信息醒目化**：`!!!!!!!!!!!!!!!!` 警示线避免错过
+
+### 🔍 一键诊断脚本
+
+- **新增** `diagnose.bat`（Windows）：8 大类环境信息收集
+- **新增** `diagnose.sh`（Mac/Linux）：同上
+- 用法：双击 / `./diagnose.sh`，全选输出贴给开发者
+
+### 🐛 修复
+
+- **HTTP server 根目录 bug**（v0.2.0 遗留）：start 脚本从 `src/client/` 改 `src/`，修复 `../shared/sync-engine.js` 404
+- **Python http.server `..` 路径拦截**：明确记录到依赖清单，未来用更高层 server
+- **Win10 start.bat 编码坑**：chcp 65001 + 中文 + setlocal enabledelayedexpansion 互打架，全 ASCII 化
+- **pushd 路径不存在时静默失败**：现在显式报错并 pause
+- **TURN 凭据误入 git**：检查脚本，验证 staged 区无敏感字符串
+
+### 📚 文档
+
+- **`docs/ARCHITECTURE.md` 新增"依赖清单"章节**：8 子章节（运行环境 / npm deps / 客户端 deps / devDeps / 配置文件 / 跨平台矩阵 / 维护流程 / 变更历史），作为依赖的单一权威记录
+- **同步更新 URL**：`http://localhost:8080` → `http://localhost:8080/client/`（根目录改为 src/）
+- 影响：REQUIREMENTS.md、ARCHITECTURE.md、STATUS.md、start.bat/stop.bat 提示信息
+
+### ✅ 验收 (Phase 1 DoD)
+
+- ✅ TURN 凭据有效（smoke test）
+- ✅ TURN 真在同步路径上（强制 relay 模式验证）
+- ✅ 跨网段实测（主人于 2026-06-07 声明通过）
+- ⏸️ 已知遗留：Win10 PC 上 start.bat 还有路径/PATH 刷新问题，诊断脚本待用户跑通
+
+### 🆕 下一阶段
+
+- **Electron 打包**：出 Mac `.dmg` + Windows `.exe` + Linux `.AppImage`
+- 选型：Electron + electron-builder（跨平台统一）
+- 计划：参见 STATUS.md "v0.3 计划" + ROADMAP.md
 
 ---
 
