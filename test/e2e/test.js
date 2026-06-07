@@ -21,6 +21,8 @@ const fs = require('fs');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const CLIENT_DIR = path.join(PROJECT_ROOT, 'client');
 const SERVER_DIR = path.join(PROJECT_ROOT, 'server');
+// WEB_ROOT: HTTP 服务根目录设到 src/ 顶层,这样 ../shared/ 能服务
+const WEB_ROOT = path.join(PROJECT_ROOT, 'src');
 const TEST_VIDEO = path.join(CLIENT_DIR, 'test-video.mp4');
 
 const HTTP_PORT = 8080;
@@ -48,11 +50,11 @@ function fail(name, reason) {
   console.log(`  ❌ FAIL: ${name} — ${reason}`);
 }
 
-/** 启动 HTTP 静态文件服务器 */
+/** 启动 HTTP 静态文件服务器(根目录为 src/ 顶层) */
 function startHttpServer() {
   return new Promise((resolve, reject) => {
     httpServer = spawn('python3', ['-m', 'http.server', String(HTTP_PORT)], {
-      cwd: CLIENT_DIR,
+      cwd: WEB_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -62,7 +64,7 @@ function startHttpServer() {
     });
 
     setTimeout(() => {
-      log(`HTTP 服务器已启动 (port ${HTTP_PORT})`);
+      log(`HTTP 服务器已启动 (port ${HTTP_PORT}, root: ${WEB_ROOT})`);
       resolve();
     }, 1000);
 
@@ -175,11 +177,11 @@ async function runTest() {
 
   // ---- 3. 加载页面 ----
   log('用户A 加载页面...');
-  await pageA.goto(`http://localhost:${HTTP_PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+  await pageA.goto(`http://localhost:${HTTP_PORT}/client/index.html`, { waitUntil: 'domcontentloaded' });
   await pageA.waitForTimeout(2000); // 等待 PeerJS CDN 加载
 
   log('用户B 加载页面...');
-  await pageB.goto(`http://localhost:${HTTP_PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+  await pageB.goto(`http://localhost:${HTTP_PORT}/client/index.html`, { waitUntil: 'domcontentloaded' });
   await pageB.waitForTimeout(2000);
 
   // ---- 4. 加载视频（在创建/加入房间之前） ----

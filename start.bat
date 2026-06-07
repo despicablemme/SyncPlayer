@@ -83,8 +83,9 @@ popd
 echo   [OK] 信令服务器已启动
 
 REM ===== 6. 启动客户端 =====
+REM 注意:HTTP 服务根目录是 src\(不是 client\),为了让 ../shared/ 路径能服务
 echo [*] 启动 Web 客户端 ^(端口 8080^)...
-pushd "%SCRIPT_DIR%src\client"
+pushd "%SCRIPT_DIR%src"
 start "SyncPlay-Client" /B cmd /c "%PYTHON_CMD% -m http.server 8080 > "%LOG_DIR%\client.log" 2>&1"
 popd
 echo   [OK] 客户端已启动
@@ -94,7 +95,7 @@ timeout /t 3 /nobreak >nul
 
 REM ===== 7. 打开浏览器 =====
 echo [*] 打开浏览器...
-start "" "http://localhost:8080"
+start "" "http://localhost:8080/client/"
 
 REM ===== 8. 提示 =====
 echo.
@@ -102,7 +103,7 @@ echo ===================================
 echo  [OK] SyncPlay 已就绪！
 echo ===================================
 echo.
-echo   [Web]  客户端:    http://localhost:8080
+echo   [Web]  客户端:    http://localhost:8080/client/
 echo   [Sig]  信令服务器: http://localhost:9000
 echo.
 echo [Tips] 使用方法：

@@ -6,18 +6,22 @@
 
 ## 测试列表
 
-| 文件 | 作用 | 时长 |
-|------|------|------|
-| `ice-smoke.js` | 验证 TURN 凭据,产生 relay 候选 | ~10s |
+| 文件 | 作用 | 时长 | 跑法 |
+|------|------|------|------|
+| `ice-smoke.js` | 验证 TURN 凭据,产生 relay 候选 | ~10s | `npm run test:ice` |
+| `regression-create-room.js` | 回归测：点"创建房间"后应显示房间号 | ~10s | `npm run test:room`(需先 ./start.sh) |
 
 ## 跑法
 
 ```bash
-# 跑 ice-smoke
+# 跑 ice-smoke(不需要启服务)
 npm run test:ice
 
-# 或直接
-node test/network/ice-smoke.js
+# 跑 regression-create-room(需要先 ./start.sh)
+./start.sh &  # 启服务
+npm run test:room
+# 或:
+node test/network/regression-create-room.js
 ```
 
 ## 与其他测试的关系

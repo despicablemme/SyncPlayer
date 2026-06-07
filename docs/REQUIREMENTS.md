@@ -37,14 +37,14 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. A 在 Mac 上双击 start.command
-   - 服务自动起，浏览器自动开 http://localhost:8080
+   - 服务自动起，浏览器自动开 http://localhost:8080/client/
    - A 选本地视频，点"创建房间"
    - 获得房间号如 "room-abc123"
 
 2. A 把房间号发给 B（微信/QQ/手输）
 
 3. B 在 Windows 上双击 start.bat
-   - 服务自动起，浏览器自动开 http://localhost:8080
+   - 服务自动起，浏览器自动开 http://localhost:8080/client/
    - B 选同一个视频，点"加入房间"，输入 room-abc123
 
 4. 双方显示"已连接" → 自动同步

@@ -75,7 +75,7 @@
 start.sh 启动：
   1. 启动信令服务器 (server/server.js, 端口 9000)
   2. 启动 Web 静态服务器 (python http.server, 端口 8080)
-  3. 浏览器自动打开 http://localhost:8080
+  3. 浏览器自动打开 http://localhost:8080/client/
 ```
 
 ### 2. 创建/加入房间

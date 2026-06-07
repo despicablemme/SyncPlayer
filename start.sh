@@ -19,6 +19,10 @@ NC='\033[0m'
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVER_DIR="$PROJECT_DIR/src/server"
 CLIENT_DIR="$PROJECT_DIR/src/client"
+# WEB_ROOT: HTTP 服务根目录,设到 src/ 顶层(而不是 client/),
+# 这样 ../shared/ 路径才能被 python http.server 正常服务
+# 主页从 http://localhost:8080/client/ 进入
+WEB_ROOT="$PROJECT_DIR/src"
 SERVER_PORT=9000
 CLIENT_PORT=8080
 
@@ -93,9 +97,10 @@ if ! kill -0 $SERVER_PID &> /dev/null; then
 fi
 echo "  ✅ 信令服务器运行中 (PID: $SERVER_PID)"
 
-# ===== 5. 启动客户端 =====
+# ===== 5. 启动客户端(HTTP 服务) =====
 echo -e "${BLUE}🌐 启动 Web 客户端 (端口 $CLIENT_PORT)...${NC}"
-(cd "$CLIENT_DIR" && python3 -m http.server $CLIENT_PORT > /tmp/syncplay-client.log 2>&1) &
+# 注意:HTTP 服务根目录是 src/(不是 client/),为了 ../shared/ 路径能服务
+(cd "$WEB_ROOT" && python3 -m http.server $CLIENT_PORT > /tmp/syncplay-client.log 2>&1) &
 CLIENT_PID=$!
 sleep 2
 if ! kill -0 $CLIENT_PID &> /dev/null; then
@@ -107,7 +112,7 @@ echo "  ✅ 客户端运行中 (PID: $CLIENT_PID)"
 
 # ===== 6. 打开浏览器 =====
 echo -e "${BLUE}🔗 打开浏览器...${NC}"
-URL="http://localhost:$CLIENT_PORT"
+URL="http://localhost:$CLIENT_PORT/client/"
 if command -v open &> /dev/null; then
   open "$URL"
 elif command -v xdg-open &> /dev/null; then

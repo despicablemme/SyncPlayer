@@ -92,9 +92,10 @@
 ├── 状态: git clean, main 分支与 origin/main 同步
 ├── 远程: https://github.com/despicablemme/SyncPlayer
 ├── 依赖: client 无构建（纯静态）, server 需 npm install
-└── 启动: 
-    - 客户端: cd client && python3 -m http.server 8080
-    - 服务端: cd server && npm install && npm start
+└── 启动:
+    - 客户端: cd src && python3 -m http.server 8080  (← 注意根目录是 src/)
+    - 主页:   http://localhost:8080/client/
+    - 服务端: cd src/server && npm install && npm start
 ```
 
 ---
