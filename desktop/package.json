@@ -1,0 +1,61 @@
+{
+  "name": "syncplay-desktop",
+  "version": "0.4.0",
+  "description": "SyncPlay Desktop App - 异地同步看片神器 (独立打包)",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "prebuild": "node -e \"const fs=require('fs');const path=require('path');const src='../src';const dest='src';function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir(src,dest);console.log('src/ copied into desktop/')\""
+  },
+  "keywords": [
+    "webrtc",
+    "video-sync",
+    "p2p",
+    "electron"
+  ],
+  "author": "Bruce",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.bruce.syncplay",
+    "productName": "SyncPlay",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "src/**/*"
+    ],
+    "asar": false,
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Video"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "peer": "^0.6.1"
+  }
+}
