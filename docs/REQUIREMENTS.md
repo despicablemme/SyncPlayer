@@ -24,7 +24,7 @@
 | # | 要求 | 说明 | v0.3 状态 |
 |---|------|------|-----------|
 | R0 | **公网环境同步** | 两端用户可以在**任意网络环境**（包括跨运营商、跨 NAT、对称 NAT、企业防火墙等）下成功连接并同步 | ✅ TURN 实现 + 跨网实测主人声明通过 |
-| R1 | **一键启动** | 双击 `start.sh` (Mac/Linux) 或 `start.bat` (Windows) 即可运行，无须任何手动配置 | ✅ 已实现,环境缺失自动装。**v0.3 后**改双击 .dmg / .exe |
+| R1 | **一键启动** | 双击 `start.sh` (Mac/Linux) 或 `start.bat` (Windows) 即可运行，无须任何手动配置 | ✅ `start.sh/command/bat` 已实现;**v0.4 Electron 桌面打包后改为双击 .dmg / .exe** |
 | R2 | **启动后界面中配置房间** | 所有房间配置（创建/加入、房间号输入）都在 Web UI 中完成，不依赖命令行 | ✅ |
 | R3 | **双方均能选择创建或加入** | 任何一方都可以点"创建房间"或"加入房间"，不受角色限制 | ✅ |
 | R4 | **加入后自动构建同步链路** | 加入房间成功后自动建立 WebRTC P2P / TURN 中继连接，双方加载视频即同步 | ✅ TURN 路径验证通过 |
@@ -151,25 +151,31 @@
 - 断线重连（5 次指数退避）
 - 28 个单元测试
 
-#### v0.3 (2026-06-07) — TURN 中继 + Electron 打包启动 🚧
-- TURN 中继实现（`config.local.js` 抽离）
-- 4 个测试基础设施（ice-smoke + regression-create-room）
-- 启动脚本加固（自动装 + 健康检查 + Win10 修复）
-- 一键诊断脚本（diagnose.{bat,sh}）
-- **当前**:Electron 打包中
+#### v0.4 (2026-06-07) — Electron 桌面打包已发布 ✅
+- `desktop/` 目录：main.js + preload.js + package.json
+- electron-builder 配置：Mac dmg / Windows nsis / Linux AppImage
+- 主进程 spawn Node 信令服务器（port 9000）+ BrowserWindow
+- `asar: false`，peer@0.6.1 安装到 desktop/node_modules/
+- 产物：`desktop/dist/SyncPlay-0.4.0-arm64.dmg`（94MB）
+- **完全零系统依赖**：不依赖 Python / Node / Homebrew
 
-#### v0.4 (TBD) — 移动端
+#### v0.5 (TBD) — TURN UI + UX 优化
+- TURN 凭据管理 UI
+- 分享链接
+- TURN 状态指示器
+
+#### v0.6 (TBD) — 移动端
 - 响应式适配
 - 手机浏览器可用
-
-#### v0.5 (TBD) — 多人房间
-- 3 人以上同步
 
 #### v1.0 (TBD) — 互联网可用
 - Phase 1: SaaS TURN（v0.3 已实现）
 - Phase 2: 自建 VPS（信令 + coturn）
 
-#### v2.0 (TBD) — 流媒体
+#### v2.0 (TBD) — 多人房间
+- 3 人以上同步
+
+#### v3.0 (TBD) — 流媒体
 - 一端本地播放 + 一端远程拉流
 
 ---

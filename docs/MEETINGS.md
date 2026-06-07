@@ -7,6 +7,145 @@
 
 ---
 
+## 会议 #004 — 2026-06-07 v0.4 Electron 桌面打包实施
+
+**参会人员**：主人（Bruce）、Jarvis（主控）、子 Agent（Executor + Tester）
+**主题**：SyncPlay v0.4 Electron 桌面打包6步走（Step 1-6）
+**耗时**：约 2 小时（主 Agent 指挥，子 Agent 执行编排）
+
+### 一、Step 1 — 工程骨架（5-10 分钟）
+
+**任务**：创建 `desktop/` 目录，装 electron + electron-builder
+
+**执行结果**：
+- `mkdir -p desktop`
+- `desktop/package.json`: name=syncplay-desktop, version=0.4.0
+- `npm install --save-dev electron@33.4.11 electron-builder@25.1.8`
+- `desktop/.gitignore`: node_modules/, dist/
+
+**验收通过**：
+- ✅ electron --version → v33.4.11
+- ✅ electron-builder --version → 25.1.8
+- ✅ node_modules/ 已生成
+
+### 二、Step 2 — Electron 主进程（15-20 分钟）
+
+**任务**：main.js + preload.js 让 Electron 出窗口跑 SyncPlay
+
+**架构决策**：
+- 主进程 spawn `node src/server/server.js`（子进程，信令 server）
+- 等子进程起来后创建 BrowserWindow
+- 用 `loadFile()` 直接加载 `src/client/index.html`（不需要 Python HTTP server）
+- `preload.js` 暂时最小化（Phase A）
+- quit 时正确清理子进程
+
+**路径解析设计**：`app.getAppPath()` 统一 dev/prod
+- dev: `appPath = /path/to/syncplay/desktop`
+- prod: `appPath = /path/to/SyncPlay.app/Contents/Resources/app.asar`
+
+**验收通过**：
+- ✅ `npm run dev` 启动 Electron，出窗口
+- ✅ 信令 server 在 9000 端口监听
+- ✅ 不依赖 Python
+- ✅ 控制台 0 报错（DevTools CSP warning 允许）
+
+### 三、Step 3 — electron-builder 配置（10-15 分钟）
+
+**任务**：配 Mac .dmg + Windows .exe + Linux .AppImage
+
+**坑 1：GitHub 下载超时**
+- electron-builder 首次构建需要下载 Electron 二进制包
+- GitHub 在某些网络环境下连接超时
+- 解决：从本地 electron 缓存 `~/Library/Caches/electron/` 复制 zip 到 electron-builder 缓存 `~/Library/Caches/electron-builder/electron/{sha256}/`
+
+**坑 2：asar 不含 src/ 文件**
+- `files: ["../src/**/*"]` 相对路径不工作（asar 内 `../` 指向 app.asar 外部，无文件）
+- 解决：prebuild 脚本复制 `../src/` → `src/`，files 改为 `src/**/*`
+
+**坑 3：server node_modules 不进 asar**
+- `src/server/node_modules/`（嵌套 node_modules）electron-builder 忽略
+- 解决：安装 `peer@0.6.1` 到 `desktop/node_modules/peer`（顶层，非嵌套）
+
+**验收通过**：
+- ✅ build 字段完整（appId/productName/targets）
+- ✅ `npm run dist:mac` 成功
+- ✅ `desktop/dist/SyncPlay-0.4.0-arm64.dmg` 存在（94MB）
+
+### 四、Step 4 — 资源打包 + asar（10-15 分钟）
+
+**最终配置**：
+- `asar: false`（asarUnpack 对嵌套 node_modules 不生效，暂用非压缩模式）
+- `peer@0.6.1` 安装在 `desktop/node_modules/peer`
+- `src/client/`、`src/shared/`、`src/server/` 全部打入 app bundle
+
+**验收通过**：
+- ✅ 装的 .app 在 `/Applications` 双击启动
+- ✅ 启动后信令 server 起来（port 9000 监听）
+- ✅ 浏览器窗口加载 SyncPlay 客户端
+- ✅ 完全不依赖系统 Python
+- ✅ 完全不依赖系统 Node（只依赖 .app 包内的 Electron）
+
+### 五、Step 5 — 干净环境验收
+
+**实际执行**：
+- 在当前 Mac 上安装 .dmg 到 `/Applications`
+- 启动 `/Applications/SyncPlay.app/Contents/MacOS/SyncPlay`
+- 验证 server 进程在 port 9000 监听
+- 验证 renderer 进程正常
+
+**结果**：
+- ✅ server 进程：`node /Applications/.../src/server/server.js`
+- ✅ port 9000：`node 47706 bruce IPv6 *:cslistener (LISTEN)`
+- ✅ 零报错
+
+**遗留**：
+- Windows / Linux 尚未在对应平台验证
+- `asar: false` 体积略大（未压缩）
+
+### 六、Step 6 — 发布文档
+
+**更新内容**：
+- 根 package.json：0.3.0 → 0.4.0
+- CHANGELOG.md：新增 v0.4.0 条目
+- STATUS.md：v0.4 已发布，v0.3 标已完成
+- ROADMAP.md：v0.4 移到已发布，加 v0.5 展望
+- MEETINGS.md：新增 #004
+- REQUIREMENTS.md：R1 加 v0.4 实现说明
+- TECH_RESEARCH.md：加 Electron 选型总结
+- README.md：加 v0.4 下载说明
+
+**Git commit**：`7a15107`
+
+### 七、技术决策记录
+
+| 决策 | 选型 | 原因 |
+|------|------|------|
+| **Electron 版本** | v33.4.11 | 最新稳定版，arm64 支持 |
+| **打包工具** | electron-builder 25.1.8 | 成熟，跨平台统一 |
+| **asar 模式** | `asar: false` | 嵌套 node_modules 打包问题暂未解决 |
+| **信令服务器** | 内部 spawn Node 子进程 | peer@0.6.1 在 desktop/node_modules |
+| **HTTP 服务器** | 不需要 | loadFile() 直接加载本地 HTML |
+| **图标** | Electron 默认 | 后续 Phase C 再换 |
+
+### 八、遗留问题（v0.4）
+
+| 问题 | 影响 | 解决方向 |
+|------|------|---------|
+| asar 压缩未启用 | 体积略大 | 后续 Phase B 修复 |
+| Mac dmg 94MB < 100MB | 不影响功能 | arm64 构建正常 |
+| Windows / Linux 未验证 | 不能保证跨平台 | 待在 Win/Linux 验证 |
+| 未签名 | macOS Gatekeeper 警告 | Phase C 代码签名 |
+
+### 九、v0.5 规划
+
+**目标**：TURN 凭据 UI + 跨网段 UX 优化
+
+**Phase A**：preload.js 暴露 IPC channel
+**Phase B**：TURN 凭据管理 UI
+**Phase C**：分享链接 + TURN 状态指示器
+
+---
+
 ## 会议 #003 — 2026-06-07 v0.3 TURN 中继实现 + Electron 打包启动
 
 **参会人员**：主人（Bruce）、Jarvis  

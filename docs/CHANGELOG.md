@@ -9,10 +9,56 @@
 
 ## [未发布]
 
-### 待实施
-- [ ] v0.3 后期：Electron TURN 凭据管理 UI
-- [ ] v0.3 后期：跨网段 UX 优化(分享链接 + TURN 状态指示器)
+### 下一版本 v0.5 计划
+- [ ] TURN 凭据管理 UI（避免手改 config.local.js）
+- [ ] 跨网段 UX 优化（分享链接 + TURN 状态指示器）
 - [ ] v1.0：代码签名 + 自动更新 + 商店发布
+
+---
+
+## [0.4.0] - 2026-06-07
+
+### 🖥️ Electron 桌面打包 (v0.3 Phase C)
+
+**目标**：出 Mac `.dmg` + Windows `.exe` + Linux `.AppImage`，双击即用，不需要装 Node / Python
+
+#### 架构设计
+- **新增** `desktop/main.js`：Electron 主进程
+  - spawn Node child process 运行 `src/server/server.js`（信令服务器，port 9000）
+  - 等 server ready 后创建 BrowserWindow
+  - 用 `loadFile()` 直接加载 `src/client/index.html`（file://，不需要 Python HTTP server）
+  - `app.getAppPath()` 统一 dev / prod 路径
+  - quit 时正确清理子进程
+- **新增** `desktop/preload.js`：Phase A 最小化 bridge（`desktopAPI`）
+- **新增** `desktop/package.json`：`syncplay-desktop@0.4.0`，electron + electron-builder
+- **新增** `desktop/.gitignore`：node_modules/、dist/
+
+#### electron-builder 配置
+- **build 字段**：
+  - `appId: com.bruce.syncplay`
+  - `productName: SyncPlay`
+  - Mac target: dmg；Windows target: nsis；Linux target: AppImage
+- **prebuild 脚本**：构建前自动复制 `../src/` → `src/`，保持 desktop 自包含
+- `asar: false`（asar 模式因 node_modules 嵌套问题暂时禁用）
+
+#### 资源打包
+- **peer@0.6.1** 安装到 `desktop/node_modules/peer`（PeerJS 信令服务器）
+- `src/client/`、`src/shared/`、`src/server/` 全部打入 app bundle
+- **完全零系统依赖**：不依赖 Python、不依赖系统 Node、不依赖 Homebrew
+- **自带 Electron Runtime**：内置 Chromium + Node，体积 ~95MB（arm64）
+
+#### 构建产物
+- `desktop/dist/SyncPlay-0.4.0-arm64.dmg`（Mac arm64）
+- `desktop/dist/SyncPlay-0.4.0.dmg`（Mac x64，需后续构建）
+- `desktop/dist/SyncPlay Setup 0.4.0.exe`（Windows，需后续构建）
+- `desktop/dist/SyncPlay-0.4.0.AppImage`（Linux，需后续构建）
+
+### 📚 文档更新
+
+- 本次 v0.4 构建完成后，9 个文档全部更新至 v0.4.0（CHANGELOG / STATUS / ROADMAP / MEETINGS / REQUIREMENTS / TECH_RESEARCH / README / ARCHITECTURE）
+- 新增 `docs/MEETINGS.md #004`（v0.4 实施会议）
+- TECH_RESEARCH.md 新增 Electron 打包选型总结
+- README.md 新增"下载 v0.4 安装包"说明
 
 ---
 

@@ -2,8 +2,8 @@
 
 > 异地同步看片神器 — 两人异地同时播放同一视频，进度实时同步
 
-**当前版本:** v0.3.0 (TURN 中继 + Electron 打包启动)
-**上一版本:** v0.2.0
+**当前版本:** v0.4.0 (Electron 桌面打包 — Mac .dmg 双击即用)
+**上一版本:** v0.3.0 (TURN 中继 + 测试基础设施)
 
 ---
 
@@ -15,6 +15,23 @@
 2. **[docs/STATUS.md](./docs/STATUS.md)** — 当前进度、下一步
 3. **[docs/ROADMAP.md](./docs/ROADMAP.md)** — 目标 + 决策
 4. **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — 架构细节
+
+---
+
+## 📦 v0.4 安装包下载
+
+**Mac 用户**：双击 `desktop/dist/SyncPlay-0.4.0-arm64.dmg` → 拖入 `/Applications`
+
+```bash
+# 开发模式（需要 Node.js）
+cd ~/CodeProjects/syncplay
+./start.sh
+
+# 生产模式（不需要任何依赖！）
+open desktop/dist/SyncPlay-0.4.0-arm64.dmg
+```
+
+**Windows / Linux**：运行 `npm run dist:win` 或 `npm run dist:linux` 生成安装包。
 
 ---
 
@@ -176,18 +193,18 @@ PEER_SECURE: true,
 - **视频文件**：两端必须选**同一个**文件
 - **测试**：E2E 测试在 headless Chrome 中 WebRTC 受限
 
-## 📦 v0.3 路线
+## 📦 v0.4 桌面打包
 
-**当前阶段：v0.3 Electron 打包** — 详见 [ROADMAP.md](./docs/ROADMAP.md)
+**已发布** — 详见 [ROADMAP.md](./docs/ROADMAP.md)
 
-预计产物:
-- Mac: `SyncPlay-0.3.0.dmg`
-- Windows: `SyncPlay Setup 0.3.0.exe`
-- Linux: `SyncPlay-0.3.0.AppImage`
+产物:
+- Mac: `desktop/dist/SyncPlay-0.4.0-arm64.dmg` ✅
+- Windows: `desktop/dist/SyncPlay Setup 0.4.0.exe`（需在 Windows 环境构建）
+- Linux: `desktop/dist/SyncPlay-0.4.0.AppImage`（需在 Linux 环境构建）
 
-双击即用,代替 `./start.command` / `start.bat`。
+双击即用，不依赖 Python / Node / Homebrew。
 
 ---
 
 *项目维护：Jarvis & 主人*
-*最后更新：2026-06-07（v0.3.0）*
+*最后更新：2026-06-07（v0.4.0）*
