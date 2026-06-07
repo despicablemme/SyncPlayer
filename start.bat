@@ -173,22 +173,32 @@ echo ===================================
 echo.
 
 REM ===== 1. Node check + auto-install =====
-echo [Check] Node.js...
+echo [Step 1/6] Checking Node.js...
 call :ensure_node
-if %errorlevel% neq 0 exit /b 1
+if %errorlevel% neq 0 (
+  echo [FAIL] Node.js check failed, exiting
+  pause
+  exit /b 1
+)
+echo [OK] Node.js check passed
 
 REM ===== 2. Python check + auto-install =====
-echo [Check] Python...
+echo [Step 2/6] Checking Python...
 set "PYTHON_CMD="
 call :ensure_python
-if %errorlevel% neq 0 exit /b 1
-REM Make sure PYTHON_CMD is set (defensive)
+if %errorlevel% neq 0 (
+  echo [FAIL] Python check failed, exiting
+  pause
+  exit /b 1
+)
 where python3 >nul 2>&1
 if %errorlevel% equ 0 set "PYTHON_CMD=python3"
 where python >nul 2>&1
 if %errorlevel% equ 0 if not defined PYTHON_CMD set "PYTHON_CMD=python"
+echo [OK] Python check passed (using %PYTHON_CMD%)
 
 REM ===== 3. Clean up occupied ports =====
+echo [Step 3/6] Cleaning up old ports...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :9000 ^| findstr LISTENING') do (
   echo   [!] Killing port 9000 (PID: %%a)
   taskkill /F /PID %%a >nul 2>&1
@@ -197,11 +207,12 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING') 
   echo   [!] Killing port 8080 (PID: %%a)
   taskkill /F /PID %%a >nul 2>&1
 )
+echo [OK] Port cleanup done
 
 REM ===== 4. Install server deps (first run) =====
+echo [Step 4/6] Checking server dependencies...
 if not exist "%SCRIPT_DIR%src\server\node_modules" (
-  echo.
-  echo [Install] First run, installing server dependencies...
+  echo   First run detected, running npm install...
   pushd "%SCRIPT_DIR%src\server"
   call npm install
   popd
@@ -212,17 +223,16 @@ if not exist "%SCRIPT_DIR%src\server\node_modules" (
     pause
     exit /b 1
   )
+) else (
+  echo   [OK] Dependencies already installed
 )
 
 REM ===== 5. Start signaling server =====
-echo.
-echo [Start] Signaling server (port 9000)...
+echo [Step 5/6] Starting signaling server (port 9000)...
 if not exist "%SCRIPT_DIR%src\server" (
-  echo.
-  echo   *** ERROR: Cannot find src\server directory ***
+  echo   [X] Cannot find src\server directory!
   echo   Script location: %SCRIPT_DIR%
   echo   Please make sure you copied the entire project (including src/ folder).
-  echo.
   pause
   exit /b 1
 )
@@ -249,10 +259,9 @@ if %errorlevel% neq 0 (
 echo   [OK] Signaling server started (port 9000)
 
 REM ===== 6. Start client (HTTP server) =====
-REM Note: HTTP server root is src/ (not client/), so ../shared/ paths work
-echo [Start] Web client (port 8080)...
+echo [Step 6/6] Starting web client (port 8080)...
 if not exist "%SCRIPT_DIR%src" (
-  echo   *** ERROR: Cannot find src directory ***
+  echo   [X] Cannot find src directory!
   pause
   exit /b 1
 )
@@ -284,6 +293,7 @@ REM ===== 7. Open browser =====
 echo.
 echo [Open] Browser...
 start "" "http://localhost:8080/client/"
+echo   [OK] Browser opened
 
 REM ===== 8. Final message =====
 echo.
@@ -304,4 +314,5 @@ echo.
 echo (You can close this window - services keep running in background)
 echo (Log location: %LOG_DIR%\)
 echo.
+echo Press any key to close this window (services keep running)...
 pause
