@@ -141,6 +141,20 @@ for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v PATH 2^>nul') do set
 set "PATH=%SYSTEM_PATH%;%USER_PATH%;%PATH%"
 exit /b 0
 
+REM wait_for_port PORT MAX_SECONDS
+REM 轮询端口直到 LISTEN,超时返回 1,成功返回 0
+:wait_for_port
+set "WP_PORT=%~1"
+set "WP_MAX=%~2"
+set "WP_ELAPSED=0"
+:wait_loop
+if %WP_ELAPSED% geq %WP_MAX% exit /b 1
+netstat -ano | findstr :%WP_PORT% | findstr LISTENING >nul
+if %errorlevel% equ 0 exit /b 0
+timeout /t 1 /nobreak >nul
+set /a "WP_ELAPSED=WP_ELAPSED+1"
+goto :wait_loop
+
 :main_start
 echo.
 echo ===================================
@@ -196,7 +210,20 @@ echo [*] 启动信令服务器 ^(端口 9000^)...
 pushd "%SCRIPT_DIR%src\server"
 start "SyncPlay-Server" /B cmd /c "npm start > "%LOG_DIR%\server.log" 2>&1"
 popd
-echo   [OK] 信令服务器已启动
+
+REM 健康检查:端口 9000 是否在 10s 内监听
+call :wait_for_port 9000 10
+if %errorlevel% neq 0 (
+  echo   [X] 端口 9000 未在 10s 内监听
+  echo       日志文件: %LOG_DIR%\server.log
+  echo.
+  echo   --- 日志内容 ---
+  type "%LOG_DIR%\server.log"
+  echo   --- 日志结束 ---
+  pause
+  exit /b 1
+)
+echo   [OK] 信令服务器已启动 (port 9000)
 
 REM ===== 6. 启动客户端 =====
 REM 注意:HTTP 服务根目录是 src\(不是 client\),为了让 ../shared/ 路径能服务
@@ -204,10 +231,22 @@ echo [*] 启动 Web 客户端 ^(端口 8080^)...
 pushd "%SCRIPT_DIR%src"
 start "SyncPlay-Client" /B cmd /c "%PYTHON_CMD% -m http.server 8080 > "%LOG_DIR%\client.log" 2>&1"
 popd
-echo   [OK] 客户端已启动
 
-REM 等待服务起来
-timeout /t 3 /nobreak >nul
+REM 健康检查:端口 8080 是否在 10s 内监听
+call :wait_for_port 8080 10
+if %errorlevel% neq 0 (
+  echo   [X] 端口 8080 未在 10s 内监听
+  echo       日志文件: %LOG_DIR%\client.log
+  echo.
+  echo   --- 日志内容 ---
+  type "%LOG_DIR%\client.log"
+  echo   --- 日志结束 ---
+  REM 清理:杀掉已起的 server
+  for /f "tokens=5" %%a in ('netstat -ano ^| findstr :9000 ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
+  pause
+  exit /b 1
+)
+echo   [OK] 客户端已启动 (port 8080)
 
 REM ===== 7. 打开浏览器 =====
 echo [*] 打开浏览器...

@@ -119,6 +119,22 @@ ensure_python() {
   return 1
 }
 
+# wait_for_port PORT [MAX_SECONDS]
+# 轮询端口直到 LISTEN,超时返回 1
+wait_for_port() {
+  local port=$1
+  local max=${2:-10}
+  local i=0
+  while [ $i -lt $max ]; do
+    if lsof -iTCP:"$port" -sTCP:LISTEN &> /dev/null; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 echo ""
 echo -e "${BLUE}🎬 SyncPlay - 一键启动${NC}"
 echo "================================="
@@ -155,13 +171,29 @@ echo ""
 echo -e "${BLUE}🚀 启动信令服务器 (端口 $SERVER_PORT)...${NC}"
 (cd "$SERVER_DIR" && npm start > /tmp/syncplay-server.log 2>&1) &
 SERVER_PID=$!
-sleep 2
+sleep 2  # 给进程 2s 启动时间(如果启动失败会更快退出)
+
+# 健康检查 1: 进程是否还活着
 if ! kill -0 $SERVER_PID &> /dev/null; then
-  echo -e "${RED}❌ 信令服务器启动失败，查看日志:${NC}"
-  echo "   tail -f /tmp/syncplay-server.log"
+  echo -e "${RED}❌ 信令服务器进程已退出,查看日志:${NC}"
+  echo "   文件: /tmp/syncplay-server.log"
+  echo ""
+  echo "   日志尾部:"
+  tail -15 /tmp/syncplay-server.log | sed 's/^/     /'
   exit 1
 fi
-echo "  ✅ 信令服务器运行中 (PID: $SERVER_PID)"
+
+# 健康检查 2: 端口是否在监听
+if ! wait_for_port $SERVER_PORT 10; then
+  echo -e "${RED}❌ 端口 $SERVER_PORT 未在 10s 内监听,查看日志:${NC}"
+  echo "   文件: /tmp/syncplay-server.log"
+  echo ""
+  echo "   日志尾部:"
+  tail -15 /tmp/syncplay-server.log | sed 's/^/     /'
+  kill $SERVER_PID 2>/dev/null
+  exit 1
+fi
+echo "  ✅ 信令服务器运行中 (PID: $SERVER_PID, port $SERVER_PORT)"
 
 # ===== 5. 启动客户端(HTTP 服务) =====
 echo -e "${BLUE}🌐 启动 Web 客户端 (端口 $CLIENT_PORT)...${NC}"
@@ -169,12 +201,30 @@ echo -e "${BLUE}🌐 启动 Web 客户端 (端口 $CLIENT_PORT)...${NC}"
 (cd "$WEB_ROOT" && python3 -m http.server $CLIENT_PORT > /tmp/syncplay-client.log 2>&1) &
 CLIENT_PID=$!
 sleep 2
+
+# 健康检查 1: 进程是否还活着
 if ! kill -0 $CLIENT_PID &> /dev/null; then
-  echo -e "${RED}❌ 客户端启动失败${NC}"
+  echo -e "${RED}❌ 客户端进程已退出,查看日志:${NC}"
+  echo "   文件: /tmp/syncplay-client.log"
+  echo ""
+  echo "   日志尾部:"
+  tail -15 /tmp/syncplay-client.log | sed 's/^/     /'
   kill $SERVER_PID 2>/dev/null
   exit 1
 fi
-echo "  ✅ 客户端运行中 (PID: $CLIENT_PID)"
+
+# 健康检查 2: 端口是否在监听
+if ! wait_for_port $CLIENT_PORT 10; then
+  echo -e "${RED}❌ 端口 $CLIENT_PORT 未在 10s 内监听,查看日志:${NC}"
+  echo "   文件: /tmp/syncplay-client.log"
+  echo ""
+  echo "   日志尾部:"
+  tail -15 /tmp/syncplay-client.log | sed 's/^/     /'
+  kill $SERVER_PID 2>/dev/null
+  kill $CLIENT_PID 2>/dev/null
+  exit 1
+fi
+echo "  ✅ 客户端运行中 (PID: $CLIENT_PID, port $CLIENT_PORT)"
 
 # ===== 6. 打开浏览器 =====
 echo -e "${BLUE}🔗 打开浏览器...${NC}"
