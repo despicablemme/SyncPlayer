@@ -11,8 +11,6 @@ on:
   push:
     tags:
       - 'v*'
-
-  push:
     branches:
       - main
     paths:
