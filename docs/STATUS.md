@@ -9,8 +9,8 @@
 
 ## 🚦 一句话状态
 
-**当前版本：v0.4.0**（已发布 — Mac .dmg）
-**下一目标：v0.5.0** — Windows .exe 打包，零依赖安装
+**当前版本：v0.5.1**（已发布 — 修 asar 结构 + 走 GitHub Actions 跨平台出 dmg/exe/AppImage）
+**下一目标：v0.6.x** — Linux AppImage 验证 + macOS 用户安装文档化（quarantine 提示）
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
@@ -24,6 +24,36 @@
 - 🔬 **技术调研** → [TECH_RESEARCH.md](./TECH_RESEARCH.md)
 - 📝 **会议纪要** → [MEETINGS.md](./MEETINGS.md)
 - 🗂 **文档索引** → [README.md](./README.md)
+
+---
+
+## ✅ v0.5.1 已完成（已发布，2026-06-08）
+
+**Commit**：`e050b39`
+**Tag**：`v0.5.1`（已推 GitHub）
+
+### 关键工作
+- `desktop/package.json`: `asar: false` → `true`（重新启用 asar 打包模式）
+- `desktop/package.json`: 加 `asarUnpack: ["node_modules/**/*", "src/server/**"]`（让信令 server 子进程能从真实文件系统访问 node_modules）
+- `desktop/main.js`: 调整 `serverCwd`（用真实目录 `path.dirname(appPath)`）+ `serverPath`（用 `app.asar.unpacked/...`）路径解析
+- 走 GitHub Actions 跨平台 build：windows-latest / macos-latest / ubuntu-latest
+- 三个产物：
+  - `SyncPlay Setup 0.5.1.exe`（Windows，~79MB）
+  - `SyncPlay-0.5.1-arm64.dmg`（Mac，~95MB）
+  - `SyncPlay-0.5.1.AppImage`（Linux，~104MB）
+
+### ⚠️ 已知问题（不阻塞发版）
+- **macOS Gatekeeper 拦截**：从 GitHub 下载的 dmg 双击会弹 "damaged"（v0.5.0 就有）
+  - **根因**：Chrome 浏览器下载时自动加了 `com.apple.quarantine` xattr + ad-hoc 签名 + Gatekeeper 严格模式
+  - **临时解法**：`xattr -dr com.apple.quarantine /Applications/SyncPlay.app`
+  - **根本解法**（v1.0+）：Apple Developer ID 签名 + notarization
+- spctl `--assess` 评估会失败（`code has no resources but signature indicates they must be present`）—— **这是 ad-hoc 签名的已知行为，不影响实际运行**，macOS 实际运行时只看 quarantine 状态
+
+### 验证状态
+- ✅ 本地 build 装上能开
+- ✅ GitHub Actions 跨平台 build 绿
+- ✅ 主人实测功能正常（创建/加入房间 + 视频同步）
+- ⚠️ macOS 用户需要手动 `xattr -d` 清 quarantine（临时）
 
 ---
 

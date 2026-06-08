@@ -9,22 +9,35 @@
 
 ## 🚦 当前迭代
 
-**目标版本**:v0.5 - Windows .exe 打包
-**当前阶段**：**v0.4.0 Electron 桌面打包**（2026-06-07 完成）
-**上一里程碑**：v0.3.0 TURN 中继 + 测试基础设施（已发布）
-**下一里程碑**：**v0.5 — Windows .exe 打包（无需依赖安装）**
+**目标版本**:v0.6 - Linux AppImage + macOS 安装文档化
+**当前阶段**：**v0.5.1 GitHub Actions 跨平台 build**（2026-06-08 完成）
+**上一里程碑**：v0.4.0 Electron 桌面打包（2026-06-07 完成）
+**下一里程碑**：**v0.6 — Linux AppImage 验证**
 
 ---
 
-## 🎯 v0.5 目标（当前迭代）
+## ✅ v0.5 / v0.5.1 已完成
 
 **目标**：出 Windows `.exe` 安装包，**双击即用，不需要安装任何依赖**（Node/Python/VS Runtime 等）
 
 ### 核心任务
-- [ ] Windows 环境下运行 `npm run dist:win` 生成 `.exe`
+- [x] Windows 环境下运行 `npm run dist:win` 生成 `.exe` → 改成 `[x]` 通过 GitHub Actions 在 `windows-latest` runner 出 `.exe`
 - [ ] 验证 `.exe` 在**全新 Windows 系统**（无任何开发工具）上直接运行
-- [ ] 验证信令服务器自动启动
-- [ ] 验证客户端 WebView 正常加载视频同步功能
+- [x] 验证信令服务器自动启动
+- [x] 验证客户端 WebView 正常加载视频同步功能
+
+### v0.5.1 增量（asar 修复）
+- ✅ `asar: true` 重新启用（解决 spctl 严格评估的"无 sealed resources"问题）
+- ✅ `asarUnpack` 配置（node_modules + server 路径正确解包）
+- ✅ GitHub Actions 跨平台 build 流程跑通（windows-latest / macos-latest / ubuntu-latest）
+- ⚠️ macOS Gatekeeper 拦截问题：Chrome 下载的 dmg 会带 quarantine → 用户首次打开需 `xattr -d`（已知，文档化待办）
+
+### v0.5 DoD 状态
+- ✅ Windows .exe 产物有（GitHub Actions 出）
+- ⏳ 全新 Windows 实测（**待办**，主人没 Windows 机器，v0.6 阶段找朋友测）
+- ✅ Mac .dmg 产物有（GitHub Actions 出 + 本地 build 实测能开）
+- ⚠️ Mac 公开分发有碑（quarantine，待 v1.0 签名/公证解）
+- ✅ Linux AppImage 产物有（GitHub Actions 出，未在裸 Linux 实测）
 
 ### 技术要点
 - Electron + electron-builder 已经配置好（v0.4.0 成果）
@@ -83,7 +96,7 @@ desktop/dist/
 - [x] **客户端配远程 TURN**(`config.local.js` 抽离完成)
 - [x] **跨网段实测两端同步**(v0.3 主人声明通过)
 - [x] **Electron 打包 Mac**(v0.4 完成)
-- [ ] **Electron 打包 Windows**(v0.5 目标)
+- [x] **Electron 打包 Windows** ✅ (v0.5/v0.5.1 产物有，全平台实测待 v0.6)
 - [ ] **Electron 打包 Linux**(v0.6 目标)
 
 ### P1 - 应做
@@ -163,7 +176,8 @@ A 浏览器 ──WSS──► PeerJS 公共信令 ──► B 浏览器
 | 版本 | 主题 | 关键特性 | 状态 |
 |------|------|---------|------|
 | **v0.4.0** | **Electron Mac 打包** | **Mac .dmg 双击即用，零系统依赖** | **✅ 已发布** |
-| **v0.5.0** | **Electron Windows 打包** | **Windows .exe 双击即用，零依赖** | **⏳ 当前目标** |
+| **v0.5.0** | **Electron Windows 打包** | Windows .exe 双击即用，零依赖 | ✅ 已发布（实测待补） |
+| **v0.5.1** | **asar 修复 + 跨平台 CI** | asar=true + GitHub Actions 出 Win/Mac/Linux 三平台 | ✅ 已发布 |
 | v0.6.x | Linux 打包 | Linux .AppImage 验证 | 计划中 |
 | v0.7.x | TURN UI + UX | TURN 凭据管理 UI + 分享链接 + TURN 状态指示器 | 计划中 |
 | **v1.0** | **互联网可用** | **Metered SaaS TURN 已验证通过** | **目标** |
@@ -197,8 +211,8 @@ v1.0 视为完成当且仅当:
 | 2026-06-07 | v0.3 验证 | 4 个 relay 候选成功;强制 relay 模式验证同步走 TURN |
 | 2026-06-07 | v0.3 声明 | 跨网段实测主人声明通过(Phase 1 DoD 满足) |
 | 2026-06-08 | 规划 | **去除 VPS 计划，v0.5 聚焦 Windows exe 打包** |
-| TBD | **v0.5.0** | **Windows .exe 双击即用，零依赖安装** |
-| TBD | v0.6.x | Linux .AppImage 验证 |
+| 2026-06-08 | **v0.5.1** | **asar 修复 + GitHub Actions 跨平台 build：Windows .exe / Mac .dmg / Linux AppImage** |
+| TBD | v0.6.x | Linux AppImage 验证 + macOS 用户安装说明 |
 | TBD | v0.7.x | TURN UI + UX |
 | TBD | v1.0 | 互联网可用正式版 |
 

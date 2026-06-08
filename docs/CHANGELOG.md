@@ -9,20 +9,58 @@
 
 ## [未发布]
 
-### 下一版本 v0.5.0 计划（2026-06-08）
+### 下一版本 v0.6.x 计划（2026-06-08）
 
-**目标**：Windows `.exe` 安装包，双击即用，零依赖安装
+**目标**：Linux AppImage 验证 + macOS 用户安装说明（quarantine 提示）
 
-- [ ] Windows 环境下运行 `npm run dist:win` 生成 `.exe`
-- [ ] 验证 `.exe` 在**全新 Windows 系统**（无任何开发工具）上直接运行
-- [ ] 验证信令服务器自动启动
-- [ ] 验证客户端 WebView 正常加载视频同步功能
+- [ ] Linux AppImage 在裸 Ubuntu / Debian 环境实测
+- [ ] 文档化 macOS Gatekeeper quarantine 临时解法
+- [ ] （可选）找朋友在全新 Windows 环境实测 .exe
 
 ### 后续版本计划
 
-- **v0.6.x**：Linux `.AppImage` 验证
+- **v0.6.x**：Linux AppImage 验证 + macOS 安装文档化
 - **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化
-- **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包）
+- **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包 + 签名/公证）
+
+---
+
+## [0.5.1] - 2026-06-08
+
+### 🔧 asar 修复 + GitHub Actions 跨平台 build (v0.5.1)
+
+**目标**：修 v0.5.0 dmg 资源不密封 + 走 CI 跨平台出三平台产物
+
+#### 修复
+- **`desktop/package.json`**: `build.asar: false` → `true`（重新启用 asar 打包）
+- **`desktop/package.json`**: 加 `build.asarUnpack: ["node_modules/**/*", "src/server/**"]`（让信令 server 子进程能从真实文件系统访问 node_modules + 解决嵌套 node_modules 问题）
+- **`desktop/main.js`**: `serverCwd` 用 `path.dirname(appPath)`（真实目录），`serverPath` 在 prod 模式用 `app.asar.unpacked/...` 路径
+
+#### GitHub Actions 跨平台 build
+- 新增 `.github/workflows/build.yml`：
+  - `build-windows` (windows-latest) → `SyncPlay Setup 0.5.1.exe`
+  - `build-mac` (macos-latest) → `SyncPlay-0.5.1-arm64.dmg`
+  - `build-linux` (ubuntu-latest) → `SyncPlay-0.5.1.AppImage`
+  - 触发：push `v*` tag / push main 改 desktop|src / workflow_dispatch 手动
+  - artifact retention 30 天
+- 触发顺序：v0.5.0 push → 跑 3 次失败（YAML 重复 trigger 块 / yaml 语法）→ 修 → 第 4 次绿
+
+#### 产物
+- `SyncPlay Setup 0.5.1.exe`（Windows，~79MB）✅
+- `SyncPlay-0.5.1-arm64.dmg`（Mac，~95MB）✅
+- `SyncPlay-0.5.1.AppImage`（Linux，~104MB）✅
+
+#### 验证
+- ✅ 本地 build 装上能开（功能 + UI 正常）
+- ✅ GitHub Actions 三平台 build 全绿（1m32s）
+- ✅ 主人实测功能正常（创建/加入房间 + 视频同步）
+- ⚠️ macOS Gatekeeper 拦截：Chrome 下载的 dmg 双击弹 "damaged"
+  - 根因：Chrome 加 `com.apple.quarantine` xattr + ad-hoc 签名
+  - 解法：用户首次打开前跑 `xattr -dr com.apple.quarantine /Applications/SyncPlay.app`
+  - 根本解：v1.0 阶段做 Apple Developer ID 签名 + notarization
+
+#### 文档
+- `docs/STATUS.md` / `docs/ROADMAP.md` / `docs/CHANGELOG.md`（本文件）全部更新
 
 ---
 
