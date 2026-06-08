@@ -137,3 +137,74 @@ jobs:
 
       - name: Verify output
         run: ls -la desktop/dist/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-mac, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SyncPlay-Windows-Setup
+          path: dist-windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: SyncPlay-Mac-dmg
+          path: dist-mac
+      - uses: actions/download-artifact@v4
+        with:
+          name: SyncPlay-Linux-AppImage
+          path: dist-linux
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-windows/*.exe
+            dist-mac/*.dmg
+            dist-linux/*.AppImage
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## 📥 下载
+
+            | 平台 | 文件 | 适用 |
+            |---|---|---|
+            | 🪟 Windows | `SyncPlay-Setup-0.5.2.exe` | Windows 10/11 |
+            | 🍎 macOS | `SyncPlay-0.5.2-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
+            | 🐧 Linux | `SyncPlay-0.5.2-x86_64.AppImage` | 主流 Linux |
+
+            ## ⚠️ macOS 用户必看
+
+            下载 dmg 装上后**双击会弹 "damaged"**——这是 Chrome 下载时自动加的 `com.apple.quarantine` 属性 + macOS Gatekeeper 拦截，**不是 dmg 损坏**。
+
+            **首次打开前**在 Terminal 跑：
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/SyncPlay.app
+            ```
+            或者：右键 SyncPlay.app → "打开" → 弹窗"仍要打开"按钮。
+
+            根本解决需要 Apple Developer ID 签名 + notarization（v1.0 阶段处理）。
+
+            ## 🆕 v0.5.2 变更
+
+            - ✅ GitHub Actions 加自动 release job（推 v* tag → 自动出 Release + 挂三平台产物）
+            - ✅ 用 `softprops/action-gh-release@v2`，绕过 Azure Blob（中国大陆访问极慢），直接走 GitHub 自己的 S3
+            - ✅ 自动生成 changelog
+
+            ## 🐛 v0.5.1 已知问题
+
+            - v0.5.1 的 asar 修复（`asar: true` + `asarUnpack`）保留
+            - spctl `--assess` 评估会失败（ad-hoc 签名特性，**不影响**实际运行）
+
+            ## 📦 安装
+
+            - **Mac**: 双击 dmg → 拖到 /Applications → 跑 xattr → 双击 .app
+            - **Windows**: 双击 exe → 一路下一步（NSIS 安装器）→ 桌面图标启动
+            - **Linux**: `chmod +x *.AppImage && ./*.AppImage`
+
+            ## 🙏 反馈
+
+            https://github.com/despicablemme/SyncPlayer/issues
