@@ -3,22 +3,32 @@
 > **这是什么？** 历史版本变更记录——每个版本改了什么、新增了什么。  
 > **何时查阅？** 想看项目演进、某个功能是哪个版本加的。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-07
+> **最后更新：** 2026-06-08
 
 ---
 
 ## [未发布]
 
-### 下一版本 v0.5 计划
-- [ ] TURN 凭据管理 UI（避免手改 config.local.js）
-- [ ] 跨网段 UX 优化（分享链接 + TURN 状态指示器）
-- [ ] v1.0：代码签名 + 自动更新 + 商店发布
+### 下一版本 v0.5.0 计划（2026-06-08）
+
+**目标**：Windows `.exe` 安装包，双击即用，零依赖安装
+
+- [ ] Windows 环境下运行 `npm run dist:win` 生成 `.exe`
+- [ ] 验证 `.exe` 在**全新 Windows 系统**（无任何开发工具）上直接运行
+- [ ] 验证信令服务器自动启动
+- [ ] 验证客户端 WebView 正常加载视频同步功能
+
+### 后续版本计划
+
+- **v0.6.x**：Linux `.AppImage` 验证
+- **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化
+- **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包）
 
 ---
 
 ## [0.4.0] - 2026-06-07
 
-### 🖥️ Electron 桌面打包 (v0.3 Phase C)
+### 🖥️ Electron 桌面打包 (v0.4)
 
 **目标**：出 Mac `.dmg` + Windows `.exe` + Linux `.AppImage`，双击即用，不需要装 Node / Python
 
@@ -48,10 +58,9 @@
 - **自带 Electron Runtime**：内置 Chromium + Node，体积 ~95MB（arm64）
 
 #### 构建产物
-- `desktop/dist/SyncPlay-0.4.0-arm64.dmg`（Mac arm64）
-- `desktop/dist/SyncPlay-0.4.0.dmg`（Mac x64，需后续构建）
-- `desktop/dist/SyncPlay Setup 0.4.0.exe`（Windows，需后续构建）
-- `desktop/dist/SyncPlay-0.4.0.AppImage`（Linux，需后续构建）
+- `desktop/dist/SyncPlay-0.4.0-arm64.dmg`（Mac arm64）✅ 已验证
+- `desktop/dist/SyncPlay Setup 0.4.0.exe`（Windows，需在 Windows 环境构建）⏳
+- `desktop/dist/SyncPlay-0.4.0.AppImage`（Linux，需在 Linux 环境构建）⏳
 
 ### 📚 文档更新
 
@@ -117,13 +126,6 @@
 - ✅ TURN 凭据有效（smoke test）
 - ✅ TURN 真在同步路径上（强制 relay 模式验证）
 - ✅ 跨网段实测（主人于 2026-06-07 声明通过）
-- ⏸️ 已知遗留：Win10 PC 上 start.bat 还有路径/PATH 刷新问题，诊断脚本待用户跑通
-
-### 🆕 下一阶段
-
-- **Electron 打包**：出 Mac `.dmg` + Windows `.exe` + Linux `.AppImage`
-- 选型：Electron + electron-builder（跨平台统一）
-- 计划：参见 STATUS.md "v0.3 计划" + ROADMAP.md
 
 ---
 

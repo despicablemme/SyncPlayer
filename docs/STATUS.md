@@ -3,16 +3,15 @@
 > **这是什么?** 项目的"进度快照"--当前版本、已完成、下一步。
 > **何时查阅?** 每次回来接任务时**先看这个**。
 > **关联文档:** [ROADMAP.md](./ROADMAP.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)
-> **最后更新：** 2026-06-07
+> **最后更新：** 2026-06-08
 
 ---
 
 ## 🚦 一句话状态
 
-**当前版本：v0.4.0**（已发布 — Electron 桌面打包）
-**上一版本：v0.3.0**（TURN 中继 + 测试基础设施）
-**下一个目标：v0.5 — TURN 凭据 UI + 跨网段 UX 优化**
-**当前阶段：v0.4 Electron 桌面打包已发布** — Mac .dmg 双击即用
+**当前版本：v0.4.0**（已发布 — Mac .dmg）
+**下一目标：v0.5.0** — Windows .exe 打包，零依赖安装
+**最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
 
@@ -47,34 +46,57 @@
 ### 遗留问题
 - asar 打包暂时禁用（asarUnpack 对嵌套 node_modules 不生效）
 - Mac dmg 使用 `asar: false`，文件未压缩，体积略大
-- Windows / Linux 打包尚未在对应平台验证
+- Windows .exe / Linux .AppImage 尚未在对应平台验证
 
 ### Git tag
 - `git tag v0.4.0` — 待主人推送
 
 ---
 
-## ✅ v0.3.0 已完成（已发布）
+## 🎯 v0.5.0 目标（下一步）
 
-### MVP (首期必出)
-- [ ] `desktop/` 目录创建 + main.js + preload.js
-- [ ] `electron-builder` 配置(Mac .dmg + Windows .exe + Linux .AppImage)
-- [ ] 本地出 Mac .dmg 验证
+**目标**：Windows `.exe` 安装包，双击即用，零依赖安装
 
-### 二期 (体验优化)
-- [ ] TURN 凭据管理 UI(避免手改 config.local.js)
-- [ ] 跨网段 UX 优化(分享链接 + TURN 状态指示器)
+### 核心任务
+- [ ] 在 Windows 环境下运行 `npm run dist:win` 生成 `.exe`
+- [ ] 验证 `.exe` 在**全新 Windows 系统**（无任何开发工具）上直接运行
+- [ ] 验证信令服务器自动启动（port 9000）
+- [ ] 验证客户端 WebView 正常加载视频同步功能
 
-### 三期 (发布)
-- [ ] 代码签名(消除 SmartScreen 警告)
-- [ ] 自动更新通道
-- [ ] GitHub Releases 发 .exe
+### 技术方案
+- electron-builder 的 NSIS target 已经配置好（v0.4.0 成果）
+- NSIS 是绿色解压型安装程序，不依赖系统库
+- Windows 环境可通过 Parallels / VM / 远程机器
 
 ### 预计产物
-- `desktop/dist/SyncPlay-0.3.0.dmg`(Mac)
-- `desktop/dist/SyncPlay Setup 0.3.0.exe`(Windows)
-- `desktop/dist/SyncPlay-0.3.0.AppImage`(Linux)
-- 预计体积:~150MB(Chromium 占比 90%)
+```
+desktop/dist/
+├── SyncPlay-0.4.0-arm64.dmg    # Mac ✅ 已验证
+├── SyncPlay Setup 0.5.0.exe    # Windows ⏳ 目标
+└── SyncPlay-0.4.0.AppImage      # Linux
+```
+
+---
+
+## ✅ v0.3.0 已完成（已发布）
+
+**日期**:2026-06-07
+**Commit**:`6db6733`
+
+### MVP (首期必出)
+- ✅ TURN 中继支持（Metered SaaS）
+- ✅ TURN 凭据抽离到 config.local.js
+- ✅ 跨网段实测通过
+- ✅ 28 个单元测试
+
+### 二期 (体验优化)
+- [ ] TURN 凭据管理 UI（避免手改 config.local.js）
+- [ ] 跨网段 UX 优化（分享链接 + TURN 状态指示器）
+
+### 三期 (发布)
+- [ ] 代码签名（消除 SmartScreen 警告）
+- [ ] 自动更新通道
+- [ ] GitHub Releases 发 .exe
 
 ---
 
@@ -99,40 +121,22 @@
 
 ## 🎯 v1.0 目标(规划中)
 
-**目标**:网页版 UI + **公网环境**(任何网络)播放 MP4 + 进度同步 - **实现方式不限**
+**目标**:Mac/Windows/Linux 全平台安装包 + 公网环境播放 MP4 + 进度同步
 
-### 已确认决策(2026-06-06 18:41)
-- ✅ **公网方案 = TURN**(方案 A)
-- ✅ **Phase 1**:用 Metered SaaS(免费)跑通
-- ✅ **Phase 2**:自建 VPS 跑 coturn + 信令
+### 已确认决策(2026-06-06 确认，2026-06-08 更新)
+- ✅ **公网方案 = TURN**（方案 A）
+- ✅ **TURN 来源 = Metered SaaS**（免费 500GB/月）
+- ❌ **VPS 部署已移除**（2026-06-08 决策）
 - ✅ 账号系统 v1.0 不做
 - ✅ 多人房间放 v2.0
 
-### Phase 1 必做(不做不算 v1.0 MVP)
-- [ ] 注册 Metered 拿 TURN 凭据
-- [ ] 改 `src/client/app.js` 加 ICE_SERVERS
-- [ ] 跨网段实测两端同步
-
-### Phase 2 应做(v1.0 正式版)
-- [ ] 租 VPS
-- [ ] 部署信令服务器(Docker compose)
-- [ ] 部署 coturn(Docker compose)
-- [ ] HTTPS 证书
-- [ ] 改 `app.js` 指向 VPS
-- [ ] 跨网段实测
-
-详细路线图见 [ROADMAP.md](./ROADMAP.md)
-
----
-
-## 🛠️ 当前可做的事(Phase 1)
-
-回到 syncplay 后,可以从以下任一项继续:
-
-1. ⭐ **主人去 https://www.metered.ca 注册** -- 拿 TURN 凭据
-2. 我改 `src/client/app.js` -- 加 ICE_SERVERS 配置
-3. **跨网段实测** -- 找朋友或用 4G 热点测两端同步
-4. Phase 1 通过后--开始 Phase 2(租 VPS)
+### v1.0 必做清单
+- [x] TURN 中继打通公网 ✅ (v0.3)
+- [x] 跨网段实测通过 ✅ (v0.3)
+- [x] Mac .dmg 打包 ✅ (v0.4)
+- [ ] Windows .exe 打包 ⏳ (v0.5)
+- [ ] Linux .AppImage 打包 ⏳ (v0.6)
+- [ ] TURN 凭据 UI ⏳ (v0.7)
 
 ---
 
@@ -140,13 +144,13 @@
 
 ```
 ~/CodeProjects/syncplay/
-├── 状态: git clean (除 v0.3.0 本地 commits)
+├── 状态: git clean (除 v0.4.0 本地 commits)
 ├── 远程: https://github.com/despicablemme/SyncPlayer
-├── 依赖: client 无构建(纯静态), server 需 npm install, 未来 desktop 需 electron
+├── 依赖: desktop/ 已自包含
 └── 启动:
+    - Mac: 双击 desktop/dist/SyncPlay-0.4.0-arm64.dmg
+    - Windows: 双击 desktop/dist/SyncPlay Setup 0.5.0.exe (v0.5 目标)
     - 开发模式: ./start.command (Mac) / start.bat (Win)
-    - 诊断模式: ./diagnose.sh (Mac) / diagnose.bat (Win)
-    - v0.3 后: 打包好的 .dmg / .exe / .AppImage 双击即用
 ```
 
 ---
@@ -161,13 +165,14 @@
 | 2026-06-06 18:00 | 规划 | 加 v1.0 硬性要求 R1-R5 |
 | 2026-06-06 18:30 | 规划 | 选定方案 A(TURN) |
 | 2026-06-06 18:41 | 规划 | **两阶段路径确定**(Phase 1 SaaS → Phase 2 自建) |
-| 2026-06-07 | **v0.4.0** | Electron 桌面打包：Mac dmg 双击即用，零系统依赖 |
-| 2026-06-07 | v0.3 测试 | 4 个 relay 候选生成成功;强制 relay 模式验证同步走 TURN |
-| 2026-06-07 | v0.3 文档 | ARCHITECTURE.md 依赖清单权威记录;所有 URL 同步 |
-| 2026-06-07 | **v0.3 MVP** | Electron 打包 desktop/ 目录搭建完成 |
-| TBD | v0.3 二期 | TURN 凭据 UI + 跨网段 UX |
-| TBD | v0.3 三期 | 代码签名 + 自动更新 + GitHub Releases |
-| TBD | v1.0 | 云端自部署 + 正式版 |
+| 2026-06-07 | **v0.4.0** | **Electron 桌面打包：Mac dmg 双击即用，零系统依赖** |
+| 2026-06-07 | v0.3 验证 | 4 个 relay 候选成功;强制 relay 模式验证同步走 TURN |
+| 2026-06-07 | v0.3 声明 | 跨网段实测主人声明通过(Phase 1 DoD 满足) |
+| 2026-06-08 | 规划 | **去除 VPS 计划，v0.5 聚焦 Windows exe 打包** |
+| TBD | **v0.5.0** | **Windows .exe 双击即用，零依赖安装** |
+| TBD | v0.6.x | Linux .AppImage 验证 |
+| TBD | v0.7.x | TURN UI + UX |
+| TBD | v1.0 | 互联网可用正式版 |
 
 ---
 
