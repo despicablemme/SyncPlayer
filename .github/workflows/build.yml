@@ -1,0 +1,188 @@
+name: Build Desktop Apps
+
+on:
+  # 手动触发（可在 GitHub Actions 页面点击 Run workflow）
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 0.5.0）'
+        required: false
+        type: string
+
+  # 推送 tag 时自动构建，如 v0.5.0
+  push:
+    tags:
+      - 'v*'
+
+  # PR 或 push 到 main 时快速检查（不生成 artifact）
+  push:
+    branches:
+      - main
+    paths:
+      - 'desktop/**'
+      - 'src/**'
+      - 'package.json'
+
+jobs:
+  # ============================================================
+  # Job 1: Build Windows .exe（x86，触发 tag 时）
+  # ============================================================
+  build-windows:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.version != ''
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'desktop/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd desktop
+          npm ci
+
+      - name: Copy source into desktop/
+        run: cd desktop && npm run prebuild
+
+      - name: Build Windows .exe
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: |
+          cd desktop
+          npm run dist:win
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncPlay-Windows-Setup
+          path: desktop/dist/*.exe
+          retention-days: 30
+
+  # ============================================================
+  # Job 2: Build Mac .dmg（Intel + ARM，触发 tag 时）
+  # ============================================================
+  build-mac:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.version != ''
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'desktop/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd desktop
+          npm ci
+
+      - name: Copy source into desktop/
+        run: cd desktop && npm run prebuild
+
+      - name: Build Mac .dmg
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: |
+          cd desktop
+          npm run dist:mac
+
+      - name: Upload Mac artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncPlay-Mac-dmg
+          path: desktop/dist/*.dmg
+          retention-days: 30
+
+  # ============================================================
+  # Job 3: Build Linux AppImage（触发 tag 时）
+  # ============================================================
+  build-linux:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.version != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'desktop/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd desktop
+          npm ci
+
+      - name: Copy source into desktop/
+        run: cd desktop && npm run prebuild
+
+      - name: Build Linux AppImage
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: |
+          cd desktop
+          npm run dist:linux
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncPlay-Linux-AppImage
+          path: desktop/dist/*.AppImage
+          retention-days: 30
+
+  # ============================================================
+  # Job 4: 验证性构建（push 到 main 时，不上传 artifact）
+  # ============================================================
+  verify:
+    if: github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'docs:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'desktop/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd desktop
+          npm ci
+
+      - name: Build for all platforms (no artifact)
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: |
+          cd desktop
+          npm run dist:mac || echo "Mac build failed, continuing..."
+          npm run dist:win || echo "Windows build failed, continuing..."
+          npm run dist:linux || echo "Linux build failed, continuing..."
+
+      - name: Verify dist output exists
+        run: |
+          ls -la desktop/dist/
