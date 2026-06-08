@@ -19,17 +19,28 @@ let mainWindow = null;
 // ─── Path Resolution ─────────────────────────────────────────────────────────
 // app.getAppPath() returns:
 //   dev:   /path/to/syncplay/desktop
-//   prod:  /path/to/SyncPlay.app/Contents/Resources/app.asar
+//   prod:  /path/to/SyncPlay.app/Contents/Resources/app.asar  (FILE)
 //
-// The server requires 'peer' package which is installed at desktop/node_modules/peer.
-// We spawn with cwd=appPath so Node can find desktop/node_modules/peer.
+// In prod, server.js and node_modules/peer are unpacked (asarUnpack) to:
+//   Resources/app.asar.unpacked/src/server/server.js
+//   Resources/app.asar.unpacked/node_modules/peer
+//
+// We must spawn with cwd=Resources/ (a real dir) and point serverPath at
+// the unpacked copy so the child Node process can access both the script
+// and the peer package on the real filesystem.
 
 function getAppPaths() {
   const appPath = app.getAppPath(); // works in both dev and prod
+  const appDir  = path.dirname(appPath); // prod → Resources/  dev → desktop/
+  const isPacked = appPath.endsWith('.asar');
+
   return {
-    serverPath: path.join(appPath, 'src', 'server', 'server.js'),
+    // In prod use the unpacked copy; in dev use the normal path
+    serverPath: isPacked
+      ? path.join(appDir, 'app.asar.unpacked', 'src', 'server', 'server.js')
+      : path.join(appPath, 'src', 'server', 'server.js'),
     indexPath:  path.join(appPath, 'src', 'client', 'index.html'),
-    serverCwd:  appPath,  // cwd where desktop/node_modules/peer is resolveable
+    serverCwd:  appDir,
   };
 }
 
