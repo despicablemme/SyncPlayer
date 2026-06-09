@@ -31,3 +31,8 @@ playwright-report/
 
 # SyncPlay 本地 TURN 凭据(config.template.js 的覆盖版)
 src/client/config.local.js
+
+# Agent 工作产物 (任务书 / context 摘要 / tester 报告 等)
+# 通用工作流模板在 agentWorkflowAndTemplates/ (上库), 这个目录是**具体任务实例** (不上库)
+# 任何版本 (.agent-tasks/v0.6.0/, .agent-tasks/v0.7.0/, ...) 都忽略
+.agent-tasks/
