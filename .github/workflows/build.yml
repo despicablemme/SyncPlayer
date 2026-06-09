@@ -170,11 +170,15 @@ jobs:
           body: |
             ## 📥 下载
 
-            | 平台 | 文件 | 适用 |
+            **Release: ${{ github.ref_name }}**
+
+            请在下方 **Assets** 区域选择对应平台的安装包：
+
+            | 平台 | 文件类型 | 适用 |
             |---|---|---|
-            | 🪟 Windows | `SyncPlay-Setup-0.5.2.exe` | Windows 10/11 |
-            | 🍎 macOS | `SyncPlay-0.5.2-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-            | 🐧 Linux | `SyncPlay-0.5.2-x86_64.AppImage` | 主流 Linux |
+            | 🪟 Windows | `.exe` | Windows 10/11 |
+            | 🍎 macOS | `.dmg` | Apple Silicon (M1/M2/M3/M4) |
+            | 🐧 Linux | `.AppImage` | 主流 Linux |
 
             ## ⚠️ macOS 用户必看
 
@@ -188,23 +192,16 @@ jobs:
 
             根本解决需要 Apple Developer ID 签名 + notarization（v1.0 阶段处理）。
 
-            ## 🆕 v0.5.2 变更
+            ## 📝 更新内容
 
-            - ✅ GitHub Actions 加自动 release job（推 v* tag → 自动出 Release + 挂三平台产物）
-            - ✅ 用 `softprops/action-gh-release@v2`，绕过 Azure Blob（中国大陆访问极慢），直接走 GitHub 自己的 S3
-            - ✅ 自动生成 changelog
-
-            ## 🐛 v0.5.1 已知问题
-
-            - v0.5.1 的 asar 修复（`asar: true` + `asarUnpack`）保留
-            - spctl `--assess` 评估会失败（ad-hoc 签名特性，**不影响**实际运行）
+            详细变更请看下方 GitHub 自动生成的 changelog，或查阅仓库内 [CHANGELOG.md](./blob/main/docs/CHANGELOG.md)。
 
             ## 📦 安装
 
-            - **Mac**: 双击 dmg → 拖到 /Applications → 跑 xattr → 双击 .app
+            - **Mac**: 双击 dmg → 拖到 /Applications → 跑 xattr 命令 → 双击 .app
             - **Windows**: 双击 exe → 一路下一步（NSIS 安装器）→ 桌面图标启动
             - **Linux**: `chmod +x *.AppImage && ./*.AppImage`
 
             ## 🙏 反馈
 
-            https://github.com/despicablemme/SyncPlayer/issues
+            https://github.com/${{ github.repository }}/issues
