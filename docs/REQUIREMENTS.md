@@ -159,32 +159,28 @@
 - 产物：`desktop/dist/SyncPlay-0.4.0-arm64.dmg`（94MB）
 - **完全零系统依赖**：不依赖 Python / Node / Homebrew
 
-#### v0.5 (TBD) — TURN UI + UX 优化
-- TURN 凭据管理 UI
-- 分享链接
-- TURN 状态指示器
+#### v0.5 / v0.5.1 (2026-06-08) — ✅ 已发布
+- v0.5.0: Windows `.exe` 跨平台 build (GitHub Actions `windows-latest` runner)
+- v0.5.1: asar 修复 + GitHub Actions 三平台 build (windows-latest / macos-latest / ubuntu-latest)
+- 三个产物: `SyncPlay Setup X.Y.Z.exe` / `SyncPlay-X.Y.Z-arm64.dmg` / `SyncPlay-X.Y.Z.AppImage`
+- 详细: [CHANGELOG.md](./CHANGELOG.md) + [ROADMAP.md](./ROADMAP.md)
 
-#### v0.6 (TBD, 2026-06-09 立项) — 体验优化 + bug 修复 ⚠️ 改方向
+#### v0.6 (2026-06-09 立项) — 🎯 当前目标: 体验优化 + bug 修复
 - 🆕 **FR-1 房间生命周期**: 加"退出房间" + "重新加入另一房间"
 - 🆕 **FR-2 视频 URL 加载 bug 修复**
 - 🆕 **FR-3 解耦视频与房间**: 任意顺序创建/进入/退出房间, 视频不匹配时 UI 状态区提示
 
-**详细需求见 [MEETINGS.md 会议 #005](./MEETINGS.md#会议-005--2026-06-09-v06-计划制定) + 下方"## 八、v0.6 新增需求"**
+**详细需求见 [MEETINGS.md 会议 #005](./MEETINGS.md) (置顶) + 下方"## 八、v0.6 新增需求"**
 
-#### v0.7 (TBD) — 移动端 / 后续
-- 响应式适配
-- 手机浏览器可用
-- (或: TURN UI, 取决于 v0.6 完工后的优先级)
+#### v1.0 (TBD) — 远期目标
+**目标**: 在 Mac 和 Windows 上可以稳定同步播放进度, 优化交互体验, 解决 bug。
+- Mac (`.dmg`): 已发布 v0.5.1 产物, ✅
+- Windows (`.exe`): 已发布 v0.5.1 产物, ⏳ 全新系统实测 (主人没 Win 机器, 待 v0.6 阶段找朋友测)
+- 稳定性: 跨网段 / 对称 NAT / 严格网络环境下能稳定连接 (✅ TURN 已验证)
+- 交互体验: 房间生命周期流畅 (v0.6 FR-1/2/3 完成后)
+- Bug 解决: 0 个已知阻塞性 bug (由后续版本持续维护)
 
-#### v1.0 (TBD) — 互联网可用
-- Phase 1: SaaS TURN（v0.3 已实现）
-- Phase 2: 自建 VPS（信令 + coturn）
-
-#### v2.0 (TBD) — 多人房间
-- 3 人以上同步
-
-#### v3.0 (TBD) — 流媒体
-- 一端本地播放 + 一端远程拉流
+**判定**: v1.0 完成 = (Mac .dmg ✅) + (Windows .exe 实测通过) + (v0.6 体验优化完成) + (0 阻塞性 bug)
 
 ---
 
