@@ -295,6 +295,8 @@ json.dump(data, open('~/.claude.json', 'w'), indent=2)
 
 **2026-06-09 主人决定**: v0.6+ 用 ACP harness 模式 (`runtime: "acp"`) 跑 Claude Code, 替代 native subagent 模式.
 
+> ⚠️ **2026-06-09 主人补充**: **所有 ACP spawn 必加 `streamTo: "parent"`** (主 agent 收实时 stream, 关键节点汇报主人). 见 #19 教训.
+
 **核心区别**: native subagent 模式 = subagent 跑 `claude -p "<prompt>"`; ACP harness 模式 = OpenClaw acpx **直接 spawn Claude Code 进程**.
 
 ### 启用 ACP (一次性)
@@ -328,6 +330,7 @@ await sessions_spawn({
   runtime: "acp",        // ← 关键
   agentId: "claude",     // ← 关键 (不填报 target_agent_required 错)
   cwd: "/Users/bruce/CodeProjects/syncplay",  // 可选, 让 Claude Code 默认在 syncplay 目录
+  streamTo: "parent",   // ← 必加 (主人 2026-06-09 决定, per #19), 主 agent 收实时 stream
   mode: "run"
 });
 await sessions_yield();  // 等完工事件 (push-based, 不 poll)
@@ -336,15 +339,22 @@ await sessions_yield();  // 等完工事件 (push-based, 不 poll)
 ### 主人在 webchat 跑 (slash command)
 
 ```
-/acp spawn claude --bind here    # bind 当前对话
+/acp spawn claude --bind here    # bind 当前对话, 主人 webchat 直接看 Claude Code 输出
 /acp spawn claude --mode persistent --thread auto
-/acp status
 /acp model claude-sonnet-4-6      # 切 model 实时生效
 /acp permissions <profile>         # 切权限 profile
 /acp steer <msg>                   # 中途改方向 (native subagent 做不到!)
 /acp cancel                        # 中断当前 turn
 /acp close                         # 关 session + bindings
 ```
+
+> ⚠️ **关键澄清 (per AGENT_PRACTICES #19)**: `/acp status` / `/acp cancel` / `/acp close` 是 **OpenClaw Gateway 命令**, **不**是用户在 webchat 直接打的 (我之前 control-claude.md 段**写错**了, 主人实测报错 `Session is not ACP-enabled: agent:main:main`).
+>
+> **正确渠道**:
+> - `/acp spawn` / `/acp steer` / `/acp model` / `/acp permissions` — 用户 (主人在 webchat) **可**打, 因为**这些**是 ACP harness 控制命令
+> - `/acp status` / `/acp cancel` / `/acp close` — **主 agent (Jarvis) 调**, 用 `subagents` 工具查 / `sessions_send` 介入
+>
+> **主人真能用的 visibility** = 主 agent 主动汇报 (完工事件) + 主人问"现在跑得怎样" + 我调 `subagents list` 查. **不**是 `/acp status` slash command.
 
 ### 跟 native subagent 模式关键差异
 

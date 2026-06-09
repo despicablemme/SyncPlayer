@@ -999,7 +999,78 @@ sessions_spawn({
 ### 关键事实
 
 | 项 | 值 |
+|
+## 19. ACP visibility 真实渠道 + /acp status 是主 agent 命令不是用户命令 (教训:2026-06-09)
+
+### 情境
+
+**时间**:2026-06-09 (v0.6-B Tester 跑 ACP 期间)  
+**触发**:主人问"用了ACP了, 我能看进度了吗"
+
+### 我犯的错
+
+我**之前**在 `agentWorkflowAndTemplates/control-claude.md` ACP 段 + 给主人回复中**都**说:
+
+> "主人在 webchat 直接打 `/acp status` 看 ACP session 状态"
+
+**这是错的。** 主人**真**在 webchat 打 `/acp status`, **报**:
+```
+ACP error (ACP_SESSION_INIT_FAILED): Session is not ACP-enabled: agent:main:main
+```
+
+### 根因
+
+per OpenClaw ACP 文档 `acp-agents.md` line 300:
+> "`/acp close`, `/acp cancel`, `/acp status`, `/status`, and `/unfocus` are Gateway commands, not prompts to the ACP harness."
+
+**关键事实**:
+- `/acp status` / `/acp cancel` / `/acp close` / `/acp steer` 是 **OpenClaw Gateway 命令** (per OpenClaw 内部 API)
+- **主 agent (我) 调**这些, **不**是用户在 webchat 直接打
+- 主会话 `agent:main:main` 是**普通 webchat session**, **不**是 ACP session — ACP 模式**只对** `agent:<agentId>:acp:<uuid>` session 有效
+- **用户在 webchat 打 `/acp status`** → OpenClaw 看**主会话**没 ACP enabled → 报错
+
+### 修法 (3 件事)
+
+1. **更新 control-claude.md ACP 段** — 澄清 `/acp status` 等是**主 agent 命令**, 不是用户命令
+2. **更新 runbook.md ACP 段** — 强调 `streamTo: "parent"` **必加**, 列**真** visibility 渠道
+3. **未来所有 ACP spawn 任务书加 `streamTo: "parent"`** — templates/builder-task.md + tester-task.md 的 OpenClaw 注入示例加这个参数
+
+### 主人**真**能用的 visibility 渠道
+
+| 渠道 | 主人能直接用? | 看什么? |
+|---|---|---|
+| **🅰️ 主 agent (我) 主动汇报** | ✅ 主人**等**我说话 | 完工事件: commit-sha + diff + test 结果 (per reporting.md) |
+| **🅱️ 主人问 + 我 `subagents` 工具查** | ✅ 主人**问** → 我**查** → 汇报 | metadata: status / runtime / taskName / sessionKey |
+| **🅲️ `streamTo: "parent"` (主 agent 收实时 stream)** | ⚠️ **我**传, 主人看**我**汇报 | 实时 stdout, **但**主 agent 收 stream 后**不**自动全转主人, 只在**关键节点**汇报 |
+| **🅳️ `/acp spawn claude --bind here`** | ✅ 主人在 webchat 打 | **真**实时看 Claude Code 输出 |
+| **❌ `/acp status` 等 slash commands** | ❌ **主 agent 调**, **不**是给用户 | —— |
+
+**最实用组合** (未来默认):
+- `sessions_spawn({runtime: "acp", agentId: "claude", streamTo: "parent", ...})` 派活
+- 主 agent 收实时 stream → **关键节点** (读完文件 / 跑 test / commit) 汇报
+- 主人想看完整进度 → 问"现在跑得怎样" → 我 `subagents list` 查
+- 主人想直接介入 → 我 `sessions_send` 改方向, 或主人 `/acp steer`
+
+### 加固 (避免下次再犯)
+
+| 规则 | 说明 |
 |---|---|
+| ✅ **未来所有 ACP spawn 必加 `streamTo: "parent"`** | 主人 (2026-06-09) 拍: "以后的, 都用 streamTo: 'parent'" |
+| ✅ **`/acp status` 等是**主 agent 命令**, **不**是用户命令 | 写进 control-claude.md 段 |
+| ✅ **用户真能用的 visibility = 主 agent 主动汇报 + `subagents` 工具查询** | 列在 control-claude.md / runbook.md |
+| ❌ **不**在文档里说"用户在 webchat 打 `/acp status`" | 我之前犯的错, 修 |
+| ✅ 文档写"主 agent 调 `/acp status` 查 ACP session 状态" | 正确描述 |
+
+### 关联
+
+- `agentWorkflowAndTemplates/control-claude.md` ACP 段 (本 commit 修)
+- `agentWorkflowAndTemplates/runbook.md` ACP 段 (本 commit 修)
+- `agentWorkflowAndTemplates/templates/builder-task.md` + `tester-task.md` OpenClaw 注入示例 (本 commit 加 streamTo: "parent")
+- `AGENT_PRACTICES.md #18` (ACP 启用步骤 + 权限坑)
+
+---
+
+---|---|
 | **ACP spawn session key 格式** | `agent:claude:acp:<uuid>` (用 `agentId` 作 prefix, 跟 native subagent 的 `agent:main:subagent:<uuid>` 不同) |
 | **`agentId` 必填** | 不填报 `target_agent_required` 错 |
 | **真 permission 配置位置** | `plugins.entries.acpx.config.permissionMode` (OpenClaw config), **不**是 `sessions_spawn` API |

@@ -170,6 +170,7 @@ await sessions_spawn({
   label: "Builder: v0.6.0-url-bug (FR-2)",
   runtime: "acp",  // ← 关键
   agentId: "claude",  // ← 关键 (不填报 target_agent_required)
+  streamTo: "parent",  // ← 必加 (主人 2026-06-09 决定, per #19 教训), 主 agent 收实时 stream
   mode: "run"
 });
 await sessions_yield();  // 等完工事件
@@ -207,8 +208,10 @@ await sessions_yield();  // 等完工事件
 |---|---|
 | v0.6 子任务 B (FR-2 URL bug) | **ACP** (新策略, 验证) |
 | v0.6 子任务 C (FR-3 视频解耦) | **ACP** (per B 体验决定) |
-| v0.6.1 / v0.7+ | **统一 ACP** |
+| **v0.6.1 / v0.7+ 必加 `streamTo: "parent"`** | **统一 ACP + streamTo** |
 | 简单调试 / 实验 | Native subagent (更轻) |
+
+> ⚠️ **2026-06-09 主人决定**: **以后所有 ACP spawn 必加 `streamTo: "parent"`** (主 agent 收实时 stream, 关键节点汇报主人). 见 `control-claude.md` ACP 段 + AGENT_PRACTICES #19.
 
 ### 沉淀
 
