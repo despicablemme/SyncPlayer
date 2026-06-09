@@ -683,6 +683,70 @@ ANTHROPIC_API_KEY     ←  错（Anthropic 官方标准字段, MiniMax 不读这
 - MEMORY.md #11 — token 持久化教训
 - AGENT_PRACTICES.md #13 — edit 工具改坏标点 (这次 settings.json 用 Python 写)
 
+
+## 15. git push 报 LibreSSL SSL_ERROR_SYSCALL 不一定真失败 (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09（c04cf17 commit push 时）  
+**现象**：`git push origin main` 报：
+
+```
+fatal: unable to access 'https://github.com/despicablemme/SyncPlayer.git/':
+LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443
+```
+
+连接**立刻挂**（0.24s），**不是**之前的 75s timeout（那是网络层卡，这是 SSL 层立刻断）。
+
+### 错误链
+
+1. 我做了 commit `c04cf17`（MiniMax 接入文档沉淀）
+2. 第一次 push 报 `SSL_ERROR_SYSCALL` —— 我以为失败了
+3. 决定重试，结果**4/5 次**都返回 `Everything up-to-date`！
+4. 用 `git fetch && git rev-parse main origin/main` 验证：两个 hash **完全一致** —— 第一次 push **真的成功了**
+
+### 根因
+
+`SSL_ERROR_SYSCALL` 在 LibreSSL 库里是个**模糊错**——可能是：
+- TCP 连接被代理客户端主动断（Vortex 客户端 bug）
+- TLS 握手协议层断（LibreSSL vs 代理实现不兼容）
+- **但**：git 内部已经收到 200 OK，commit 数据已经上传
+- git 检测到 SSL 错就报失败，但**数据已经在 GitHub 上了**
+
+### 修法
+
+**不要只信 git 的"失败"输出**。必跑：
+
+```bash
+# 验证 commit 是否真的到了
+git fetch origin main
+LOCAL=$(git rev-parse main)
+REMOTE=$(git rev-parse origin/main)
+if [ "$LOCAL" = "$REMOTE" ]; then
+  echo "✓ push 实际成功了 (本地和远端 hash 一致)"
+else
+  echo "✗ push 真失败了, 需要重试"
+  git push origin main
+fi
+```
+
+### 加固
+
+| 规则 | 说明 |
+|---|---|
+| ❌ **不**看到 `SSL_ERROR_SYSCALL` 就立刻重试 | 重试可能把同一个 commit push 多次(无副作用但浪费) |
+| ✅ **必跑** `git fetch && git rev-parse` 验证 | 实证比 git 输出可信 |
+| ✅ 配合 `GIT_HTTP_VERSION=1.1` 试 | 避开 HTTP/2 ALPN 协商问题(参考之前 75s timeout 教训) |
+| ✅ 配合 `GIT_CURL_VERBOSE=1` 看 SSL 错在哪步 | CONNECT OK + TLS Client Hello OK + Server Hello 没回 = 假阳性 |
+
+### 关联
+
+- AGENT_PRACTICES #12: macOS 系统代理 ≠ git 代理 (网络抖)
+- AGENT_PRACTICES #15 (本条): 抖出新形态 - SSL 假阳性
+- 主 agent 行动：push 后**必须** fetch 验证，不靠 git 单一输出
+
+---
+
 ---
 
 ---
