@@ -190,6 +190,22 @@ body {
   background: #d63a52;
 }
 
+.exit-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: #e94560;
+  border: 1px solid #e94560;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.exit-btn:hover {
+  background: #e94560;
+  color: white;
+}
+
 .controls {
   display: flex;
   align-items: center;

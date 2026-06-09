@@ -83,6 +83,7 @@
       this.reconnectAttempts = 0;
       this.engine = null;
       this.onSync = null; // 回调：把消息交给 SyncEngine
+      this.destroyed = false; // 用户主动退出后,屏蔽 PeerJS 触发的错误/重连噪音
     }
 
     init(isInitiator, targetPeerId, video) {
@@ -120,6 +121,7 @@
       });
 
       this.peer.on('error', (err) => {
+        if (this.destroyed) return;
         console.error('[peer] error', err);
         const msg = err.type === 'peer-unavailable'
           ? '对方房间号不存在或未上线'
@@ -130,6 +132,7 @@
       });
 
       this.peer.on('disconnected', () => {
+        if (this.destroyed) return;
         console.warn('[peer] disconnected, attempting reconnect');
         toast('信令服务器断开，正在重连...', 'error');
         updateLocalStatus('信令重连中...', 'waiting');
@@ -168,6 +171,7 @@
       });
 
       conn.on('close', () => {
+        if (this.destroyed) return;
         console.warn('[conn] close');
         updateRemoteStatus('已断开', 'disconnected');
         this.engine.stop();
@@ -187,6 +191,7 @@
     }
 
     attemptReconnect() {
+      if (this.destroyed) return;
       if (this.reconnectAttempts >= CONFIG.MAX_RECONNECT_ATTEMPTS) {
         toast('重连失败，请重新加入房间', 'error');
         return;
@@ -211,6 +216,7 @@
     }
 
     destroy() {
+      this.destroyed = true;
       this.engine && this.engine.stop();
       this.conn && this.conn.close();
       this.peer && this.peer.destroy();
@@ -232,6 +238,7 @@
   const roomLabel = document.getElementById('roomLabel');
   const myRoomId = document.getElementById('myRoomId');
   const copyBtn = document.getElementById('copyBtn');
+  const exitBtn = document.getElementById('exitBtn');
 
   let connMgr = null;
 
@@ -291,6 +298,23 @@
     joinBtn.disabled = true;
   }
 
+  function enableRoomButtons() {
+    createBtn.disabled = false;
+    joinBtn.disabled = false;
+  }
+
+  function exitRoom() {
+    if (!connMgr) return;
+    connMgr.destroy();
+    connMgr = null;
+    enableRoomButtons();
+    roomInfo.style.display = 'none';
+    myRoomId.textContent = '';
+    updateLocalStatus('就绪', '');
+    updateRemoteStatus('未连接', '');
+    toast('已退出房间', 'success');
+  }
+
   function startSession(isInitiator, targetRoomId) {
     if (!ensureVideoReady()) return;
     if (connMgr) connMgr.destroy();
@@ -327,6 +351,8 @@
       () => toast('复制失败', 'error')
     );
   });
+
+  exitBtn.addEventListener('click', exitRoom);
 
   // 初始状态
   updateLocalStatus('就绪', '');
