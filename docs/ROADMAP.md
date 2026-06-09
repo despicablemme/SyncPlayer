@@ -9,10 +9,10 @@
 
 ## 🚦 当前迭代
 
-**目标版本**:v0.6 - Linux AppImage + macOS 安装文档化
-**当前阶段**：**v0.5.1 GitHub Actions 跨平台 build**（2026-06-08 完成）
-**上一里程碑**：v0.4.0 Electron 桌面打包（2026-06-07 完成）
-**下一里程碑**：**v0.6 — Linux AppImage 验证**
+**目标版本**：v0.6 - 体验优化 + bug 修复 (房间生命周期 / 视频 URL bug / 视频匹配) ⚠️ 改方向
+**当前阶段**：v0.6 计划制定完成 (2026-06-09)
+**上一里程碑**：v0.5.1 GitHub Actions 跨平台 build (2026-06-08 完成)
+**下一里程碑**：v0.6 实现 (阶段 B: 拆任务 + 派 subagent)
 
 ---
 
@@ -51,6 +51,36 @@ desktop/dist/
 ├── SyncPlay Setup 0.5.0.exe    # Windows ⏳ 目标
 └── SyncPlay-0.4.0.AppImage     # Linux
 ```
+
+---
+
+## 🎯 v0.6 路线 (2026-06-09 立项, 体验优化 + bug 修复)
+
+**目标**: 3 个核心体验问题解决
+
+### 核心任务
+- [ ] **FR-1 房间生命周期扩展**: 退出房间 + 重新加入另一房间
+- [ ] **FR-2 视频 URL 加载 bug 修复**: HTTP/HTTPS/跨域 URL 都能正常加载
+- [ ] **FR-3 解耦视频与房间 + 视频不匹配提示**: 任意顺序, 不匹配时 UI 提示
+
+### 技术要点
+- **状态机重构**: 房间状态机 (`no_room`/`connecting`/`in_room`/`disconnected`) + 视频子状态 (`no_video`/`waiting_peer`/`synced`/`mismatch`)
+- **FR-1 + FR-3 合并改状态机**: 避免重复修改
+- **视频匹配算法**: URL / 文件名 / 时长 (任一即可, Builder 决定策略)
+- **UI 状态区扩展**: 加"视频不匹配"红色提示
+
+### 决策记录
+- ⚠️ **改方向**: 原计划"v0.6 = Linux AppImage 验证 + macOS 安装文档化" 改为 "v0.6 = 体验优化"
+- ❌ 推迟: v0.5 (TURN UI) / v0.7 (移动端) 延后
+- ✅ 优先: 主人 3 个体验问题
+
+### 详细需求
+见 [REQUIREMENTS.md](./REQUIREMENTS.md) "## 八、v0.6 新增需求" + [MEETINGS.md](./MEETINGS.md) 会议 #005
+
+### 进度
+- [x] 计划制定 (阶段 A) — 2026-06-09
+- [ ] 实现 (阶段 B: 拆任务 + 派 subagent)
+- [ ] 验收 (阶段 C: 完工)
 
 ---
 
@@ -178,7 +208,7 @@ A 浏览器 ──WSS──► PeerJS 公共信令 ──► B 浏览器
 | **v0.4.0** | **Electron Mac 打包** | **Mac .dmg 双击即用，零系统依赖** | **✅ 已发布** |
 | **v0.5.0** | **Electron Windows 打包** | Windows .exe 双击即用，零依赖 | ✅ 已发布（实测待补） |
 | **v0.5.1** | **asar 修复 + 跨平台 CI** | asar=true + GitHub Actions 出 Win/Mac/Linux 三平台 | ✅ 已发布 |
-| v0.6.x | Linux 打包 | Linux .AppImage 验证 | 计划中 |
+| **v0.6.x** | **体验优化 + bug 修复** | **房间退出/换房 + 视频 URL bug + 视频匹配** | **🎯 当前** (2026-06-09 立项) |
 | v0.7.x | TURN UI + UX | TURN 凭据管理 UI + 分享链接 + TURN 状态指示器 | 计划中 |
 | **v1.0** | **互联网可用** | **Metered SaaS TURN 已验证通过** | **目标** |
 | v2.0 | 多人房间 | 3 人以上同步 | 长期 |
@@ -212,7 +242,7 @@ v1.0 视为完成当且仅当:
 | 2026-06-07 | v0.3 声明 | 跨网段实测主人声明通过(Phase 1 DoD 满足) |
 | 2026-06-08 | 规划 | **去除 VPS 计划，v0.5 聚焦 Windows exe 打包** |
 | 2026-06-08 | **v0.5.1** | **asar 修复 + GitHub Actions 跨平台 build：Windows .exe / Mac .dmg / Linux AppImage** |
-| TBD | v0.6.x | Linux AppImage 验证 + macOS 用户安装说明 |
+| 2026-06-09 | **v0.6** | **计划制定完成 (阶段 A) — 改方向为体验优化** |
 | TBD | v0.7.x | TURN UI + UX |
 | TBD | v1.0 | 互联网可用正式版 |
 
