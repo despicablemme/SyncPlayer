@@ -15,6 +15,86 @@
 
 ---
 
+## 📁 文件上库决策规则 (主 agent 必先想)
+
+**任何目标开始前, 主 agent 必须先决定: 这个文件/文档/任务是"通用型"还是"任务实例"?**
+
+### 决策树
+
+```
+这个文件是:
+├─ 任何任务都用的工具/规范/模板?
+│   ├─ 是 → 上库 (跟 runbook 一样放 agentWorkflowAndTemplates/)
+│   │       例子: runbook.md / templates/builder-task.md / roles.md
+│   └─ 否 → 看下一项
+│
+└─ 是为某次具体任务写的 (任务书 / context 摘要 / tester 报告)?
+    ├─ 是 → **不上库**, 放 .agent-tasks/<version>/
+    │       例子: v0.6.0-room-exit-builder.md / tester report
+    └─ 否 → 看下一项
+
+└─ 是项目代码/需求/架构/会议纪要 (syncplay 本身的)?
+    ├─ 是 → 上库, 放 docs/ (per runbook 阶段 A/C 规则)
+    │       例子: docs/MEETINGS.md / docs/ROADMAP.md / docs/REQUIREMENTS.md
+    └─ 否 → 看下一项
+
+└─ 是临时调试/日志/构建产物?
+    └─ → .gitignore 排除, 不入仓库
+            例子: node_modules/ / dist/ / .agent-tasks/ / .env
+```
+
+### 通用 vs 任务实例 边界 (主 agent 必记住)
+
+| 类别 | 存放位置 | 是否上库 | 例子 |
+|---|---|---|---|
+| **通用工作流文档** | `agentWorkflowAndTemplates/` | ✅ 上库 | runbook.md / workflow.md / roles.md / control-claude.md / acceptance.md / reporting.md |
+| **通用模板** | `agentWorkflowAndTemplates/templates/` | ✅ 上库 | builder-task.md / tester-task.md / context-summary.md / test-report.md / commit-message.md |
+| **项目代码** | `src/` / `desktop/` / `test/` | ✅ 上库 | 实际产品代码 |
+| **项目需求/架构/路线图** | `docs/` | ✅ 上库 (per runbook 阶段 A/C 规则) | REQUIREMENTS.md / ROADMAP.md / STATUS.md / ARCHITECTURE.md / CHANGELOG.md / MEETINGS.md / AGENT_PRACTICES.md |
+| **任务实例 (任务书/context/tester报告)** | `syncplay/.agent-tasks/<version>/` | ❌ **不上库** | v0.6.0-room-exit-builder.md / v0.6.0-room-exit-context.md / v0.6.0-room-exit-tester.md |
+| **临时构建产物/配置** | `node_modules/` / `dist/` / `.env` | ❌ 上 .gitignore | 任何"项目需要但 git 不跟踪" |
+
+### 推论
+
+1. **任务书不 commit** — 一次性的、给 Claude Code 跑的指令, 跟 git 无关
+2. **任务书不放仓库根** — 仓库根的 `tasks/` 目录**不**应该存在, 避免混淆
+3. **任务书放 `.agent-tasks/`** — 物理上在项目里 (subagent 容易读), 但 `.gitignore` 排除
+4. **每个版本新建子目录** — `.agent-tasks/v0.6.0/` / `.agent-tasks/v0.7.0/` / etc.
+5. **任务书过期不清理** — 让 git 历史自然, 不主动 rm (主 agent 一次任务, 任务书就走完流程)
+
+### 反模式 (主 agent 必避)
+
+| ❌ 反模式 | 为什么错 |
+|---|---|
+| 把任务书 commit 到仓库 | 任务书是临时文件, 混进 git 历史造成 reviewer 噪音 |
+| 把任务书放 `docs/` | 跟项目文档混淆 (项目文档是"事实记录", 任务书是"工作流产物") |
+| 把任务书放 `agentWorkflowAndTemplates/tasks/` | 跟通用模板混淆, 未来版本会堆很多废弃 |
+| 任务书命名不带版本 (如 `tasks/builder-task.md`) | 看不出是哪个版本的, 容易混 |
+| 每个任务书单独 .gitignore | 麻烦, 用 `.agent-tasks/` 整个目录 ignore 干净 |
+
+### 配套 .gitignore 规则
+
+```gitignore
+# Agent 工作产物 (任务书 / context 摘要 / tester 报告 等)
+# 通用工作流模板在 agentWorkflowAndTemplates/ (上库), 这个目录是**具体任务实例** (不上库)
+.agent-tasks/
+```
+
+(per 主人 2026-06-09 确认方案 1)
+
+### 主 agent 检查清单 (写任何新文件前)
+
+- [ ] 这是"任何任务都用得上"的吗?
+  - 是 → 放 `agentWorkflowAndTemplates/` + commit
+- [ ] 这是"为这次任务写的"吗?
+  - 是 → 放 `.agent-tasks/<version>/` + .gitignore 排除
+- [ ] 这是"项目代码/需求/会议纪要"吗?
+  - 是 → 放 `src/` / `docs/` + per runbook 阶段 A/C 规则 + commit
+- [ ] 这是"临时构建/日志"吗?
+  - 是 → 放对应目录 + .gitignore 排除
+
+---
+
 ## 📊 完整 3 阶段流程图
 
 ```
