@@ -71,6 +71,20 @@
     document.getElementById('remoteStatusDot').className = 'status-dot ' + state;
   }
 
+  /** 把 HTMLMediaElement.error.code 翻成人话 (FR-2 错误提示)
+   *  1=ABORTED  2=NETWORK (CORS/断网)  3=DECODE (格式/损坏)  4=SRC_NOT_SUPPORTED
+   */
+  function describeVideoError(err) {
+    if (!err) return '未知错误';
+    switch (err.code) {
+      case 1: return '加载被中止';
+      case 2: return '网络错误(URL 不通 / CORS 拦截 / Mixed Content)';
+      case 3: return '视频解码失败(格式不支持或文件损坏)';
+      case 4: return '视频源不支持(浏览器无法播放该格式, HLS 可能需要 Safari 或 hls.js)';
+      default: return err.message || '未知错误(code=' + (err.code || '?') + ')';
+    }
+  }
+
   // ============ 连接管理（带自动重连） ============
 
   class ConnectionManager {
@@ -242,13 +256,32 @@
 
   let connMgr = null;
 
-  // 视频加载
+  // 视频加载 (FR-2 修 URL 加载 bug)
+  // 关键修复:
+  //   1. 切换 src 前先 pause + removeAttribute('src') + load(), 避免浏览器保留旧 src 状态
+  //   2. HLS/m3u8 URL 走 canPlayType 能力检测, 不支持时给清晰提示(不黑屏)
+  //   3. 不在 src= 后立即再调 load() (会 abort + reload, 偶发 race)
   function loadVideo(src, label) {
+    // 1. 完整 reset: pause + 移除旧 src + load() 触发空载
+    try { video.pause(); } catch (e) { /* 元素可能没准备好, 忽略 */ }
+    video.removeAttribute('src');
+    video.load();
+
+    // 2. HLS / m3u8 能力检测 (Safari 原生支持; Chrome/Firefox 需要 hls.js)
+    //    不支持时 toast 警告, 用户知道为什么没画面(避免黑屏困惑)
+    if (/\.m3u8(\?.*)?$/i.test(src)) {
+      const canHls = video.canPlayType('application/vnd.apple.mpegurl') !== ''
+                  || video.canPlayType('application/x-mpegURL') !== '';
+      if (!canHls) {
+        toast('当前浏览器不支持 HLS 流(m3u8), 请用 Safari 或安装 hls.js', 'error');
+      }
+    }
+
+    // 3. 设置新 src (浏览器自动 load, 无需再调 video.load())
     fileName.textContent = label;
     video.src = src;
     video.style.display = 'block';
     noVideo.style.display = 'none';
-    video.load();
   }
 
   videoInput.addEventListener('change', (e) => {
@@ -274,14 +307,21 @@
 
   video.addEventListener('loadedmetadata', () => {
     if (fileName.textContent.startsWith('加载中')) {
-      fileName.textContent = '已加载: ' + videoUrlInput.value.split('/').pop();
+      // 去掉 query string, 兜底"视频" 避免空名
+      const rawName = (videoUrlInput.value || '').split('/').pop().split('?')[0];
+      fileName.textContent = '已加载: ' + (rawName || '视频');
     }
-    toast(`视频就绪，时长 ${video.duration.toFixed(1)}s`, 'success');
+    if (isFinite(video.duration)) {
+      toast(`视频就绪, 时长 ${video.duration.toFixed(1)}s`, 'success');
+    }
   });
 
   video.addEventListener('error', () => {
+    // 区分网络 / 解码 / 格式不支持, 给出具体原因(不黑屏困惑)
+    const reason = describeVideoError(video.error);
     fileName.textContent = '视频加载失败';
-    toast('视频加载失败，请检查文件或 URL', 'error');
+    toast('视频加载失败: ' + reason, 'error');
+    console.error('[video] error', video.error);
   });
 
   // 房间操作
