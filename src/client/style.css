@@ -252,3 +252,22 @@ body {
   gap: 16px;
   font-family: monospace;
 }
+
+/* v0.6 FR-3: 视频不匹配红色警告 (in_room_mismatch 状态) */
+.status-item .mismatch-warning {
+  color: #e74c3c;
+  font-weight: 600;
+  background: rgba(231, 76, 60, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease; /* 状态切换平滑, 不闪烁 */
+}
+
+.status-item #localStatus.mismatch-warning {
+  animation: mismatch-pulse 2s infinite;
+}
+
+@keyframes mismatch-pulse {
+  0%, 100% { background: rgba(231, 76, 60, 0.12); }
+  50%      { background: rgba(231, 76, 60, 0.22); }
+}

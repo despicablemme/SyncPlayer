@@ -1,15 +1,19 @@
 // SyncPlay - 客户端核心逻辑
-// 重构版本 v2：修复同步状态机 + 漂移校准 + 断线重连
+// 重构版本 v2: 修复同步状态机 + 漂移校准 + 断线重连
+// v0.6 FR-3: 房间状态机重构 (6 态) + 解耦视频与房间 + 视频不匹配提示
 
 (function () {
   'use strict';
 
-  // 从独立模块加载 SyncEngine（浏览器通过 window.SyncPlay，Node 可直接 require）
+  // 从独立模块加载 SyncEngine(浏览器通过 window.SyncPlay,Node 可直接 require)
   const { SyncEngine } = window.SyncPlay || {};
+  // v0.6 FR-3: 房间状态机 + 视频匹配
+  const { STATES: ROOM_STATES, RoomStateMachine } = window.SyncPlayRoomState || {};
+  const { videosMatch, describeVideo, emptyVideoInfo } = window.SyncPlayVideoMatch || {};
 
   // ============ 配置 ============
   const CONFIG = {
-    // PeerJS 服务器地址（默认走官方公共服务器，可改为自建）
+    // PeerJS 服务器地址(默认走官方公共服务器,可改为自建)
     PEER_HOST: '0.peerjs.com',
     PEER_PORT: 443,
     PEER_PATH: '/',
@@ -36,7 +40,7 @@
 
   // ============ 工具函数 ============
 
-  /** 用 crypto 生成房间号（密码学安全） */
+  /** 用 crypto 生成房间号(密码学安全) */
   function generateRoomId() {
     if (window.crypto && window.crypto.randomUUID) {
       return 'room-' + window.crypto.randomUUID().split('-')[0];
@@ -44,7 +48,7 @@
     return 'room-' + Math.random().toString(36).substring(2, 10);
   }
 
-  /** Toast 通知（替代 alert） */
+  /** Toast 通知(替代 alert) */
   function toast(msg, type = 'info') {
     let el = document.getElementById('toast');
     if (!el) {
@@ -85,7 +89,7 @@
     }
   }
 
-  // ============ 连接管理（带自动重连） ============
+  // ============ 连接管理(带自动重连) ============
 
   class ConnectionManager {
     constructor() {
@@ -96,7 +100,7 @@
       this.isInitiator = false;
       this.reconnectAttempts = 0;
       this.engine = null;
-      this.onSync = null; // 回调：把消息交给 SyncEngine
+      this.onSync = null; // 回调:把消息交给 SyncEngine
       this.destroyed = false; // 用户主动退出后,屏蔽 PeerJS 触发的错误/重连噪音
     }
 
@@ -113,7 +117,7 @@
         debug: 1,
         config: {
           iceServers: ICE_SERVERS,
-          iceTransportPolicy: 'all',  // 'all' 允许 TURN 中继，'relay' 强制中继
+          iceTransportPolicy: 'all',  // 'all' 允许 TURN 中继,'relay' 强制中继
         },
       };
 
@@ -122,7 +126,7 @@
 
       this.peer.on('open', (id) => {
         console.log('[peer] open', id);
-        updateLocalStatus(this.isInitiator ? '等待对方加入...' : '正在连接...', 'waiting');
+        updateLocalStatus('等待对方加入...', 'waiting');
 
         if (!this.isInitiator) {
           this.connectToPeer();
@@ -148,7 +152,7 @@
       this.peer.on('disconnected', () => {
         if (this.destroyed) return;
         console.warn('[peer] disconnected, attempting reconnect');
-        toast('信令服务器断开，正在重连...', 'error');
+        toast('信令服务器断开,正在重连...', 'error');
         updateLocalStatus('信令重连中...', 'waiting');
         this.peer.reconnect();
       });
@@ -168,25 +172,27 @@
     bindConnection(conn) {
       conn.on('open', () => {
         console.log('[conn] open');
-        updateLocalStatus('已连接', 'connected');
-        updateRemoteStatus('已连接', 'connected');
         this.reconnectAttempts = 0;
-        this.engine.start();
-
-        // 连接建立后告知对方我的文件元信息
-        const video = this.engine.video;
-        if (video.duration && !isNaN(video.duration)) {
-          this.send({ type: 'file_info', duration: video.duration });
-        }
+        // v0.6 FR-3: 不再无条件 engine.start() — 改成"进入 in_room_synced 才启动"
+        // 同步指令 gating 由 roomState 的 listener 控制 (见下面 attachRoomState)
+        // 连接刚开时: 我有 video → 对方有没有还不知道; 我没 video → 等对方先 video_info
+        onConnOpen();
       });
 
       conn.on('data', (data) => {
+        // v0.6 FR-3: video_info 走自己的处理, 不进 SyncEngine (engine 不认识这个 type)
+        if (data && data.type === 'video_info') {
+          onPeerVideoInfo(data);
+          return;
+        }
         this.engine.handle(data);
       });
 
       conn.on('close', () => {
         if (this.destroyed) return;
         console.warn('[conn] close');
+        // v0.6 FR-3: peer lost → 状态机切回 connecting (还在房间里, 等待重连)
+        onConnClose();
         updateRemoteStatus('已断开', 'disconnected');
         this.engine.stop();
         this.attemptReconnect();
@@ -207,7 +213,7 @@
     attemptReconnect() {
       if (this.destroyed) return;
       if (this.reconnectAttempts >= CONFIG.MAX_RECONNECT_ATTEMPTS) {
-        toast('重连失败，请重新加入房间', 'error');
+        toast('重连失败,请重新加入房间', 'error');
         return;
       }
       this.reconnectAttempts++;
@@ -256,11 +262,196 @@
 
   let connMgr = null;
 
-  // 视频加载 (FR-2 修 URL 加载 bug)
-  // 关键修复:
+  // ============ v0.6 FR-3: 房间状态机 + 视频信息同步 ============
+
+  // 房间状态机 (6 态)
+  const roomState = new RoomStateMachine();
+
+  // 视频信息: 我端 + 对端
+  let myVideoInfo = null;   // {url?, fileName?, duration?, loaded: true|false}
+  let peerVideoInfo = null; // 对端发来的, 同结构
+
+  /**
+   * 状态 → UI 文案 + dot class + mismatch-warning class
+   * 与 REQUIREMENTS.md FR-3 段 + 任务书"6 个状态"对应
+   */
+  const STATE_DISPLAY = {
+    [ROOM_STATES.NO_ROOM]: {
+      localText: '请创建或加入房间',
+      localClass: '',
+      remoteText: '未连接',
+      remoteClass: '',
+      mismatch: false,
+    },
+    [ROOM_STATES.CONNECTING]: {
+      localText: '连接中...',
+      localClass: 'waiting',
+      remoteText: '对方未连接',
+      remoteClass: '',
+      mismatch: false,
+    },
+    [ROOM_STATES.IN_ROOM_NO_VIDEO]: {
+      localText: '已连接, 请加载视频',
+      localClass: 'connected',
+      remoteText: '已连接',
+      remoteClass: 'connected',
+      mismatch: false,
+    },
+    [ROOM_STATES.IN_ROOM_WAITING_PEER_VIDEO]: {
+      localText: '等待对方加载视频...',
+      localClass: 'waiting',
+      remoteText: '已连接',
+      remoteClass: 'connected',
+      mismatch: false,
+    },
+    [ROOM_STATES.IN_ROOM_SYNCED]: {
+      localText: '已同步',
+      localClass: 'connected',
+      remoteText: '已连接',
+      remoteClass: 'connected',
+      mismatch: false,
+    },
+    [ROOM_STATES.IN_ROOM_MISMATCH]: {
+      localText: '视频不匹配, 无法同步进度',
+      localClass: 'disconnected',
+      remoteText: '已连接',
+      remoteClass: 'connected',
+      mismatch: true, // 红色警告
+    },
+  };
+
+  /** 设置我的视频信息 + 广播给对端 + 重新计算状态 */
+  function setMyVideoInfo(info) {
+    myVideoInfo = info;
+    // 立即告诉对端 (如果连接还在)
+    if (connMgr && connMgr.send) {
+      connMgr.send({
+        type: 'video_info',
+        loaded: !!(info && info.loaded),
+        url: info && info.url,
+        fileName: info && info.fileName,
+        duration: info && info.duration,
+      });
+    }
+    recomputeRoomState();
+  }
+
+  /** 收到对端 video_info → 更新 + 重算 */
+  function onPeerVideoInfo(data) {
+    peerVideoInfo = {
+      loaded: !!(data && data.loaded),
+      url: data && data.url,
+      fileName: data && data.fileName,
+      duration: data && data.duration,
+    };
+    recomputeRoomState();
+  }
+
+  /** conn.on('open') 时: 重算状态 (从 connecting → in_room_no_video 或其他) */
+  function onConnOpen() {
+    recomputeRoomState();
+    // 如果我已经加载视频, 主动把我的 video_info 发给对方
+    if (myVideoInfo && myVideoInfo.loaded && connMgr) {
+      connMgr.send({
+        type: 'video_info',
+        loaded: true,
+        url: myVideoInfo.url,
+        fileName: myVideoInfo.fileName,
+        duration: myVideoInfo.duration,
+      });
+    }
+  }
+
+  /** conn.on('close') 时: peer lost, 清空 peer info + 切回 connecting */
+  function onConnClose() {
+    peerVideoInfo = null;
+    if (roomState.state !== ROOM_STATES.NO_ROOM) {
+      roomState.setState(ROOM_STATES.CONNECTING);
+    }
+  }
+
+  /**
+   * 核心: 根据"我端视频" + "对端视频" + "连接状态" 计算房间状态
+   * - 没 connMgr / 没连接 → no_room 或 connecting
+   * - 连接开了但都没/有一方视频 → in_room_no_video / waiting_peer
+   * - 双方都有视频 → synced 或 mismatch
+   */
+  function recomputeRoomState() {
+    if (!connMgr) {
+      roomState.setState(ROOM_STATES.NO_ROOM);
+      return;
+    }
+    // 连接是否真的开了? (conn.open 是 DataConnection 的属性)
+    const isOpen = !!(connMgr.conn && connMgr.conn.open);
+    if (!isOpen) {
+      // 还在 connecting (首次连或重连中)
+      if (roomState.state === ROOM_STATES.NO_ROOM) {
+        // 还没开始 session, 保持 no_room
+        return;
+      }
+      roomState.setState(ROOM_STATES.CONNECTING);
+      return;
+    }
+
+    // 连接已开, 计算视频子状态
+    const myLoaded = !!(myVideoInfo && myVideoInfo.loaded);
+    const peerLoaded = !!(peerVideoInfo && peerVideoInfo.loaded);
+
+    if (!myLoaded) {
+      roomState.setState(ROOM_STATES.IN_ROOM_NO_VIDEO);
+    } else if (!peerLoaded) {
+      roomState.setState(ROOM_STATES.IN_ROOM_WAITING_PEER_VIDEO);
+    } else {
+      // 双方都加载了 — 校验匹配
+      if (videosMatch(myVideoInfo, peerVideoInfo)) {
+        roomState.setState(ROOM_STATES.IN_ROOM_SYNCED);
+      } else {
+        roomState.setState(ROOM_STATES.IN_ROOM_MISMATCH);
+      }
+    }
+  }
+
+  /**
+   * 状态变化 listener: UI 更新 + sync engine gating
+   * (per FR-3: 同步指令只在 in_room_synced 时发送)
+   */
+  roomState.onStateChange((newState, oldState) => {
+    // 1. UI 显示
+    const display = STATE_DISPLAY[newState];
+    if (display) {
+      updateLocalStatus(display.localText, display.localClass);
+      if (display.remoteText) {
+        updateRemoteStatus(display.remoteText, display.remoteClass);
+      }
+      const localStatusEl = document.getElementById('localStatus');
+      if (localStatusEl) {
+        localStatusEl.classList.toggle('mismatch-warning', !!display.mismatch);
+      }
+    }
+
+    // 2. SyncEngine gating — 只有 in_room_synced 才启动, 离开就停
+    if (connMgr && connMgr.engine) {
+      if (newState === ROOM_STATES.IN_ROOM_SYNCED) {
+        connMgr.engine.start();
+      } else if (oldState === ROOM_STATES.IN_ROOM_SYNCED) {
+        connMgr.engine.stop();
+      }
+    }
+
+    // 3. mismatch toast (从非 mismatch → mismatch 切过来时提示一次)
+    if (newState === ROOM_STATES.IN_ROOM_MISMATCH && oldState !== ROOM_STATES.IN_ROOM_MISMATCH) {
+      toast('视频不匹配, 无法同步进度', 'error');
+    }
+  });
+
+  // ============ 视频加载 (FR-2 修 URL 加载 bug + FR-3 解耦) ============
+
+  // 关键修复 (FR-2):
   //   1. 切换 src 前先 pause + removeAttribute('src') + load(), 避免浏览器保留旧 src 状态
   //   2. HLS/m3u8 URL 走 canPlayType 能力检测, 不支持时给清晰提示(不黑屏)
   //   3. 不在 src= 后立即再调 load() (会 abort + reload, 偶发 race)
+  // FR-3 扩展:
+  //   4. 解耦: 视频加载完全独立于房间 (loadedmetadata 时更新 myVideoInfo 并广播)
   function loadVideo(src, label) {
     // 1. 完整 reset: pause + 移除旧 src + load() 触发空载
     try { video.pause(); } catch (e) { /* 元素可能没准备好, 忽略 */ }
@@ -311,6 +502,9 @@
       const rawName = (videoUrlInput.value || '').split('/').pop().split('?')[0];
       fileName.textContent = '已加载: ' + (rawName || '视频');
     }
+    // FR-3: 视频元数据就绪 → 写进 myVideoInfo, 触发状态重算
+    const info = describeVideo(video, fileName.textContent);
+    setMyVideoInfo(info || emptyVideoInfo());
     if (isFinite(video.duration)) {
       toast(`视频就绪, 时长 ${video.duration.toFixed(1)}s`, 'success');
     }
@@ -322,16 +516,11 @@
     fileName.textContent = '视频加载失败';
     toast('视频加载失败: ' + reason, 'error');
     console.error('[video] error', video.error);
+    // FR-3: 加载失败 → 标记我端无视频
+    setMyVideoInfo(emptyVideoInfo());
   });
 
-  // 房间操作
-  function ensureVideoReady() {
-    if (!video.src) {
-      toast('请先选择视频或输入 URL', 'error');
-      return false;
-    }
-    return true;
-  }
+  // ============ 房间操作 (FR-3: 完全解耦 — 不再强制要求视频先加载) ============
 
   function disableRoomButtons() {
     createBtn.disabled = true;
@@ -347,16 +536,17 @@
     if (!connMgr) return;
     connMgr.destroy();
     connMgr = null;
+    // FR-3: 清空对端 video_info, 切回 no_room, 触发 listener 重置 UI + 停 engine
+    peerVideoInfo = null;
+    roomState.setState(ROOM_STATES.NO_ROOM);
     enableRoomButtons();
     roomInfo.style.display = 'none';
     myRoomId.textContent = '';
-    updateLocalStatus('就绪', '');
-    updateRemoteStatus('未连接', '');
     toast('已退出房间', 'success');
   }
 
+  // FR-3 关键改动: 删掉 ensureVideoReady() 调用 — 视频不再是房间前提
   function startSession(isInitiator, targetRoomId) {
-    if (!ensureVideoReady()) return;
     if (connMgr) connMgr.destroy();
 
     connMgr = new ConnectionManager();
@@ -371,6 +561,8 @@
     }
     roomInfo.style.display = 'flex';
     disableRoomButtons();
+    // FR-3: 显式切到 connecting, 让 UI 立刻进入"连接中..."状态
+    roomState.setState(ROOM_STATES.CONNECTING);
   }
 
   createBtn.addEventListener('click', () => startSession(true, null));
@@ -395,9 +587,14 @@
   exitBtn.addEventListener('click', exitRoom);
 
   // 初始状态
-  updateLocalStatus('就绪', '');
-  updateRemoteStatus('未连接', '');
+  roomState.setState(ROOM_STATES.NO_ROOM);
 
   // 暴露给调试
-  window.__syncplay = { connMgr: () => connMgr };
+  window.__syncplay = {
+    connMgr: () => connMgr,
+    roomState: () => roomState,
+    myVideoInfo: () => myVideoInfo,
+    peerVideoInfo: () => peerVideoInfo,
+    STATE_DISPLAY: STATE_DISPLAY,
+  };
 })();
