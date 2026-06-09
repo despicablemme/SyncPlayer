@@ -206,6 +206,61 @@ echo "${ANTHROPIC_API_KEY:0:10}"  # 验证 env (只打前缀, 不打全文)
 如果 key 不存在或无效，subagent **立刻** 报告失败（per #11 教训——"凭证已就位"必须用工具验证，不能凭印象）。
 
 ---
+### 📌 实战案例：Claude Code + MiniMax Coding Plan (2026-06-09 已验证)
+
+主 agent 配 Claude Code 走 MiniMax 订阅 API（不走 Anthropic 官方 API）的完整流程。
+
+**主人环境**：
+- macOS
+- MiniMax Coding Plan 订阅（key 前缀 `sk-cp-`）
+- 所在地：中国大陆
+
+**完整 9 项 env**（写到 `~/.claude/settings.json` 的 `env` 段）：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<sk-cp-... 订阅 key>",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "ANTHROPIC_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M3",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "512000"
+  }
+}
+```
+
+**配套改 `~/.claude.json`**（merge，不覆盖！）:
+```python
+import json
+data = json.load(open('~/.claude.json'))
+data['hasCompletedOnboarding'] = True
+json.dump(data, open('~/.claude.json', 'w'), indent=2)
+```
+
+**关键注意事项**：
+- ⚠️ Token 字段是 `ANTHROPIC_AUTH_TOKEN`（**不是** `ANTHROPIC_API_KEY`）
+- ⚠️ Base URL 是 `minimaxi.com`（**不是** `minimax.com`，国际用户用 `minimax.io`）
+- ⚠️ 用 Python 写文件，不破坏全角标点（per AGENT_PRACTICES #13）
+- ⚠️ ~/.claude.json **必须 merge** —— 文件已有 userID 等数据，覆盖会丢
+- ⚠️ 9 项 env 都要齐（**特别**：第 9 项 `CLAUDE_CODE_AUTO_COMPACT_WINDOW: 512000` 容易被漏）
+- ✅ 用 `claude -p "say hello in Chinese"` 测连通 —— MiniMax-M3 中文输出是"你好"等
+
+**完整 5 步流程**：
+
+| 步骤 | 主人做 | 主 agent 做 |
+|---|---|---|
+| 1 | 拿订阅 key (https://platform.minimaxi.com/user-center/payment/token-plan) | (无) |
+| 2 | `printf '%s' '<key>' > /tmp/.claude_api_key && chmod 600 /tmp/.claude_api_key` | (无) |
+| 3 | (无) | **安全验证 key** (curl 测 MiniMax API, 拿 HTTP 200) |
+| 4 | (无) | **Python 写 settings.json** (9 项 env, 权限 600) + **merge ~/.claude.json** (加 hasCompletedOnboarding) |
+| 5 | (无) | **安全删 /tmp/.claude_api_key** + **claude -p 测试** + 报告主人 |
+
+**详细教训**：见 `~/CodeProjects/syncplay/AGENT_PRACTICES.md #14`
+
 
 ## ⚠️ 边界（什么情况下不推荐用 Claude Code）
 

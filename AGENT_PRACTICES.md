@@ -587,6 +587,104 @@ with open('file.md', 'w', encoding='utf-8') as f:
 - 教训 #11（token 配置失职）的反面：**配置改动前要 diff 验证**——改完任何文件先看 diff 再说"做完了"
 
 
+
+## 14. Claude Code 配 MiniMax Coding Plan API (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09（v0.6 工作流目录建立后）  
+**目标**：让 Claude Code 走主人 MiniMax 订阅 API（不是 Anthropic 官方 API）  
+**主人订阅**：MiniMax Coding Plan（key 前缀 `sk-cp-`）
+
+### 关键配置（已验证可跑通）
+
+**Base URL（主人用中国大陆）**：
+```
+https://api.minimaxi.com/anthropic
+```
+（**注意**：`minimaxi` 不是 `minimax`！国际用户是 `api.minimax.io/anthropic`）
+
+**Token 字段名（重要！）**：
+```
+ANTHROPIC_AUTH_TOKEN  ←  正确
+ANTHROPIC_API_KEY     ←  错（Anthropic 官方标准字段, MiniMax 不读这个）
+```
+
+**完整 9 项 env**（写到 `~/.claude/settings.json` 的 `env` 段）：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<sk-cp-... 订阅 key>",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "ANTHROPIC_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M3",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M3",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "512000"
+  }
+}
+```
+
+**配套改 `~/.claude.json`**（merge, 不要覆盖！）:
+- 加 `"hasCompletedOnboarding": true`（避免首次启动弹 onboarding）
+
+### 关键流程
+
+1. **主人拿 key** (去 https://platform.minimaxi.com/user-center/payment/token-plan)
+2. **主人 printf 到 /tmp**（不贴 webchat）:
+   ```bash
+   printf '%s' '<key>' > /tmp/.claude_api_key
+   chmod 600 /tmp/.claude_api_key
+   ```
+3. **主 agent 验证 key**（不暴露到 transcript）:
+   ```bash
+   K=$(cat /tmp/.claude_api_key)
+   echo "${K:0:8}...${K: -6}"  # 只显示前缀+后缀
+   curl -sS -o /dev/null -w "%{http_code}
+" --max-time 10 \
+     -X POST "https://api.minimaxi.com/anthropic/v1/messages" \
+     -H "x-api-key: $K" -H "anthropic-version: 2023-06-01" \
+     -d '{"model":"MiniMax-M3","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}'
+   ```
+   应该返回 `HTTP=200`
+4. **Python 写 settings.json**（per #13 教训, 不破坏标点）:
+   - 用 `json.dump(..., ensure_ascii=False)` 保留中文
+   - 权限 `0o600`
+5. **Python merge ~/.claude.json**（不能覆盖 userID 等现有数据!）:
+   ```python
+   data = json.load(open('~/.claude.json'))
+   data['hasCompletedOnboarding'] = True
+   json.dump(data, open('~/.claude.json', 'w'), indent=2)
+   ```
+6. **安全删 /tmp**:
+   ```bash
+   rm -Pv /tmp/.claude_api_key
+   ```
+7. **验证**:
+   ```bash
+   claude --version          # 2.1.153
+   claude -p "say hello"     # 跑通说明 env 生效
+   ```
+
+### 坑 (我踩的)
+
+1. **第一版漏了 `CLAUDE_CODE_AUTO_COMPACT_WINDOW: 512000`** — 主人发官方 URL 给我看才发现. 以后**必须**先 fetch 完整文档, 不能只看搜索 snippet.
+
+2. **官方推荐用 `ANTHROPIC_AUTH_TOKEN`** — 我之前以为是 `ANTHROPIC_API_KEY` (Anthropic 标准), MiniMax 不读这个.
+
+3. **MiniMax Coding Plan API 跟 Anthropic 官方不完全兼容** — GitHub 有 issue 提到 (MiniMax Coding Plan 用了"非标准 Anthropic 兼容 API"). Claude Code 大部分功能能用, 边缘 case 可能不工作.
+
+### 关联
+
+- `agentWorkflowAndTemplates/control-claude.md` — "凭证管理"段已加 MiniMax 接入模式
+- MEMORY.md #11 — token 持久化教训
+- AGENT_PRACTICES.md #13 — edit 工具改坏标点 (这次 settings.json 用 Python 写)
+
+---
+
 ---
 ---|
 | 主人给 PAT token | #11：立刻 `git credential-osxkeychain store` + `git credential-osxkeychain get` 验证 |
