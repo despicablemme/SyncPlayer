@@ -20,7 +20,8 @@
 ```
 agentWorkflowAndTemplates/
 ├── README.md                ← 你正在看 (总览)
-├── workflow.md              ← 通用工作流主文档
+├── runbook.md               ← ⭐ 主 agent 处理"任何目标"的 3 阶段标准流程 (plan→实现→完工)
+├── workflow.md              ← 整体流程图
 ├── roles.md                 ← 三角色分工 (Builder / Tester / Reviewer) + Claude Code 怎么对应
 ├── control-claude.md        ← 如何控制 Claude Code (派活/抓结果/独立上下文/边界)
 ├── acceptance.md            ← 验收机制 (Reviewer 流程/通过条件/打回标准)

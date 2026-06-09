@@ -822,6 +822,90 @@ $ claude --add-dir /Users/bruce/CodeProjects/syncplay -p "读 .../AGENT_PRACTICE
 - `agentWorkflowAndTemplates/templates/builder-task.md`: 已加绝对路径 + self-verification
 - MEMORY.md #14: 主人求证时必须有切实证据 (主人这一问就是这种场景)
 
+
+## 17. docs 是事实记录, 不是进度中转站 (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09 (刚写完 v0.6-runbook.md 后)  
+**主人纠正**：
+
+> "这不是 v0.6 的 runbook, 这是每一次每一个版本的, 所以要写成通用的.  
+> 第二, 我和你制定好下一阶段计划后, 你需要先将计划落实到相关文档中记录,  
+> 才好落地目标, 比如 roadmap, 比如记录讨论的会议纪要, 比如更新需求, 等等.  
+> 接下来才是去做事. 全部目标实现后, 再去逐个更新 docs 内文档.  
+> 懂了吗, 这是对你的完整流程的补充和调整."
+
+**关键点**：
+1. Runbook 是**通用**的（任何目标/任何版本都用这套流程）, 不是某个版本专属
+2. 流程有 3 阶段: **计划 (先写文档) → 实现 (只做事) → 完工 (统一更新 docs)**
+3. **做事过程中不更新 docs** — docs 是"事实记录", 不是"进度中转站"
+
+### 我之前的错
+
+1. **命名错**: 写了 `v0.6-runbook.md` — 应该叫 `runbook.md` (通用, 每个目标都用)
+2. **流程错**: 我把"写 CHANGELOG/STATUS"放在每个子任务 PASS 之后 — 应该放在"全部 PASS 后" 一次性更新
+3. **顺序错**: 我把"拆任务"放在阶段 A, 但阶段 A 应该是"先写 plan 文档 (roadmap/requirements/meetings)", 拆任务是阶段 B 的事
+4. **隐含错**: 把 docs 当"进度同步工具" — 这跟工程上 docs 的"事实记录"角色冲突
+
+### 修法: 3 阶段流程 (新 runbook.md)
+
+```
+阶段 A: 落实目标 (plan/讨论)
+- 主人说目标
+- 主 agent 跟主人确认理解
+- 主 agent 更新 plan 类文档:
+  - ROADMAP.md
+  - REQUIREMENTS.md (如有)
+  - MEETINGS.md (会议纪要)
+  - 其他相关 docs
+- commit + push "plan: <目标> 计划 + 会议纪要"
+- ❌ 不写任务书, 不派活, 不动 STATUS
+
+阶段 B: 实现 (做事)
+- 拆任务 → 写 3 文件任务书 (builder/context/tester) × N 子任务
+- 对每个子任务 serial 跑:
+  - 派 Builder subagent
+  - 立刻查交付 + 汇报
+  - 派 Tester subagent (SERIAL)
+  - 验收
+  - PASS: 子任务 commit (只代码 + 任务书)
+- ❌ 做事过程中**不**更新 docs/STATUS/CHANGELOG
+- 重复 N 次直到全部 PASS
+
+阶段 C: 完工 (更新 docs)
+- 全部子任务 PASS 后
+- 主 agent **一次性**更新:
+  - STATUS.md (vX → ✅ Shipped)
+  - ROADMAP.md (vX → ✅, vX+1 → 🎯 next)
+  - CHANGELOG.md (vX release 条目)
+  - ARCHITECTURE.md (如架构变)
+  - AGENT_PRACTICES.md (如有新教训)
+  - MEETINGS.md (vX 完工纪要)
+- commit + push
+- 跟主人汇报完工
+```
+
+### 加固
+
+| 规则 | 说明 |
+|---|---|
+| ❌ 不在子任务 PASS 时就更新 STATUS | 违反 "docs 是事实记录" 原则 |
+| ❌ 不在做事过程中写 CHANGELOG | CHANGELOG 是 release 时的总结, 不是实时日志 |
+| ✅ 阶段 A **先写** plan 文档 (roadmap/meetings/requirements) | 没 plan = 目标没"落实", 容易跑偏 |
+| ✅ 阶段 C **一次性**更新所有 docs | "完工" 是个原子事件 |
+| ✅ docs 反映"已完成/已决定", 不反映"进行中" | "进行中" 在 git log + tasks/ 里 |
+| ✅ Runbook 命名用通用 (runbook.md), 不用版本名 (v0.6-runbook.md) | 每个目标都用同一套流程 |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` — 已按 3 阶段重写
+- `agentWorkflowAndTemplates/README.md` — 索引已加 runbook.md
+- `agentWorkflowAndTemplates/workflow.md` — 关联文档已加 runbook.md 引用
+- `AGENT_PRACTICES.md` #1 — 主人重要要求立刻写入文件 (主人这次纠正立刻沉淀)
+
+---
+
 ---
 
 ---
