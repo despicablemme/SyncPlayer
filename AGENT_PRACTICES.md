@@ -904,6 +904,142 @@ $ claude --add-dir /Users/bruce/CodeProjects/syncplay -p "读 .../AGENT_PRACTICE
 - `agentWorkflowAndTemplates/workflow.md` — 关联文档已加 runbook.md 引用
 - `AGENT_PRACTICES.md` #1 — 主人重要要求立刻写入文件 (主人这次纠正立刻沉淀)
 
+
+## 18. ACP harness 模式启用: v1/v2/v3 完整故事 (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09（v0.6 阶段 B 实施期, 主人决定改用 ACP 模式跑 Claude Code）  
+**目标**：用 OpenClaw 的 ACP harness 模式 (`runtime: "acp"`) 跑 Claude Code, 替代 native subagent 模式 (`runtime: "subagent"`), 解决主人之前的"subagent 看不到 Claude Code"visibility 痛点
+
+### v1/v2/v3 失败根因 + 修法 (完整故事)
+
+#### v1: 失败 - 缺 permission profile
+
+```typescript
+// 我 (Jarvis) 派:
+sessions_spawn({
+  task: "echo hello from ACP and report",
+  taskName: "acp-smoke-test",
+  runtime: "acp",
+  agentId: "claude"
+  // ❌ 漏了 permissionProfile / permissionMode
+});
+```
+
+**结果**: `AcpRuntimeError: Permission prompt unavailable in non-interactive mode: code=ACP_TURN_FAILED` (1m19s)
+
+**根因** (per OpenClaw ACP 文档 `acp-agents.md`):
+> "Non-interactive sessions cannot click native permission prompts, so write/exec-heavy coding runs usually need an ACPX permission profile that can proceed headlessly."
+
+OpenClaw acpx 默认 `permissionMode=approve-reads` + `nonInteractivePermissions=fail`. 任何 write/exec 触发的 permission prompt 在 non-interactive 模式 = fail.
+
+#### v2: 失败 - 我**编了**不存在的 API 参数
+
+```typescript
+// 我修法: 加 permissionProfile: "approve-all" (sessions_spawn API 参数)
+sessions_spawn({
+  task: "echo hello from ACP v2",
+  taskName: "acp-smoke-test-v2",
+  runtime: "acp",
+  agentId: "claude",
+  permissionProfile: "approve-all"  // ❌ 这个参数名是错的, OpenClaw 不接受
+});
+```
+
+**结果**: 同样 `AcpRuntimeError: Permission prompt unavailable` (37s)
+
+**根因**: 我**编造**了 `permissionProfile` 参数名. OpenClaw sessions_spawn API **没有**这个参数. 真正的配置是 acpx plugin 自己的 config, **不是** sessions_spawn API 参数.
+
+#### v3: ✅ 成功 - 正确配法
+
+```bash
+# 1. 配 acpx plugin 的 permissionMode (正确位置)
+openclaw config set plugins.entries.acpx.config.permissionMode approve-all
+
+# 2. 重启 gateway 让配置生效
+openclaw gateway restart
+
+# 3. (可选) 非交互权限策略 - 但合法值只有 deny/fail, 不能 approve-all
+# openclaw config set plugins.entries.acpx.config.nonInteractivePermissions approve-all
+# Error: must be equal to one of the allowed values (allowed: "deny", "fail")
+```
+
+**结果**: `hello from ACP v3` (4s, 退出码 0, 无 permission prompt) ✅
+
+### 正确的 ACP 启用步骤 (一次性配置)
+
+```bash
+# 1. 装 acpx plugin
+openclaw plugins install @openclaw/acpx
+
+# 2. 启用
+openclaw config set plugins.entries.acpx.enabled true
+
+# 3. 配 harness-level break-glass (关键 - 不配 v1/v2 失败)
+openclaw config set plugins.entries.acpx.config.permissionMode approve-all
+
+# 4. 重启 gateway
+openclaw gateway restart
+
+# 5. 验证 (主人在 webchat 跑 /acp doctor)
+# /acp doctor
+# 应输出: enabled, healthy backend, Claude Code auth present
+
+# 6. 派 smoke test (主 agent API 验证)
+sessions_spawn({
+  task: "echo hello from ACP",
+  taskName: "acp-smoke",
+  runtime: "acp",
+  agentId: "claude"
+  // 不需要 permissionProfile / permissionMode (已配 OpenClaw config)
+})
+```
+
+### 关键事实
+
+| 项 | 值 |
+|---|---|
+| **ACP spawn session key 格式** | `agent:claude:acp:<uuid>` (用 `agentId` 作 prefix, 跟 native subagent 的 `agent:main:subagent:<uuid>` 不同) |
+| **`agentId` 必填** | 不填报 `target_agent_required` 错 |
+| **真 permission 配置位置** | `plugins.entries.acpx.config.permissionMode` (OpenClaw config), **不**是 `sessions_spawn` API |
+| **`permissionMode` 合法值** | `approve-reads` (默认) / `approve-all` (break-glass) / 还有其他 |
+| **`nonInteractivePermissions` 合法值** | 只有 `deny` / `fail` (我误以为有 `approve-all`, **错**) |
+| **首次跑 ACP 慢** | 第一次下 Claude Code adapter + spawn, 后续快 (v3 echo 4s 包含全部) |
+| **MUST**: `runtime: "acp"` + `agentId: "<id>"` 同时传 | 不然 spawn 拒绝 |
+
+### 跟 native subagent 模式关键差异
+
+| 维度 | Native subagent | ACP harness |
+|---|---|---|
+| session key 格式 | `agent:main:subagent:<uuid>` | `agent:<agentId>:acp:<uuid>` (e.g. `agent:claude:acp:...`) |
+| 跑什么 | OpenClaw sub-agent (我派) | 外部 Claude Code CLI 进程 (acpx spawn) |
+| permission 配置 | `tools.subagents.tools.allow/deny` | `plugins.entries.acpx.config.permissionMode` |
+| visibility (主 agent) | ❌ 看不到 subagent 内部 stdout | ✅ `streamTo: "parent"` 实时回流 |
+| 适用任务 | 短原子任务 (< 1min) | 复杂长 session (中途可 `/acp steer`) |
+| 装插件 | 不需要 | 需要 `@openclaw/acpx` |
+
+### 加固 (避免下次再踩)
+
+| 规则 | 说明 |
+|---|---|
+| ✅ **真权限配置在 OpenClaw config, 不在 API** | `plugins.entries.acpx.config.permissionMode=approve-all`, 不是 sessions_spawn 参数 |
+| ✅ **派 ACP 前必查文档** | OpenClaw ACP 文档 line 322 表 + line 340 配法 |
+| ✅ **不编造 API 参数名** | 不确定时先 `sessions_spawn --help` 或查 `subagents.md` + `acp-agents.md` |
+| ✅ **`nonInteractivePermissions` 合法值只有 `deny`/`fail`** | 文档没说, 实测才能确认 (我误以为有 `approve-all` 是错的) |
+| ✅ **配 config 后必重启 gateway** | 不重启不生效, 还会误以为配错 |
+| ✅ **smoke test 是必需** | v1/v2 失败立刻发现, v3 通过才确认链路通 |
+| ❌ **不**用 native subagent 跑 Claude Code | v0.6+ 推荐 ACP (主人原话 "直接用起来") |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` § "🎯 模式选择: Native subagent vs ACP harness" 段 (已加, commit `3f2c4d6`)
+- OpenClaw 官方文档 `/opt/homebrew/lib/node_modules/openclaw/docs/tools/acp-agents.md` + `acp-agents-setup.md`
+- AGENT_PRACTICES #16 (--add-dir 必加) - 配套的"必加参数"教训
+- MEMORY #16 (--add-dir 必加) - native subagent 模式配套
+
+---
+
 ---
 
 ---
