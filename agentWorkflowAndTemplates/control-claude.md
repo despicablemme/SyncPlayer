@@ -291,6 +291,123 @@ json.dump(data, open('~/.claude.json', 'w'), indent=2)
 **详细教训**：见 `~/CodeProjects/syncplay/AGENT_PRACTICES.md #14`
 
 
+## 🎯 ACP harness 模式 (v0.6+ 推荐替代 subagent 模式)
+
+**2026-06-09 主人决定**: v0.6+ 用 ACP harness 模式 (`runtime: "acp"`) 跑 Claude Code, 替代 native subagent 模式.
+
+**核心区别**: native subagent 模式 = subagent 跑 `claude -p "<prompt>"`; ACP harness 模式 = OpenClaw acpx **直接 spawn Claude Code 进程**.
+
+### 启用 ACP (一次性)
+
+```bash
+# 1. 装 acpx plugin
+openclaw plugins install @openclaw/acpx
+
+# 2. 启用
+openclaw config set plugins.entries.acpx.enabled true
+
+# 3. 配 harness-level permission (关键, 不配会 Permission prompt unavailable)
+openclaw config set plugins.entries.acpx.config.permissionMode approve-all
+
+# 4. 重启 gateway
+openclaw gateway restart
+
+# 5. 验证 (主人在 webchat 跑 /acp doctor, 这是 chat slash command)
+# /acp doctor
+# 应输出: enabled, healthy backend, Claude Code auth present
+```
+
+### 主 agent 派 ACP Builder / Tester (sessions_spawn API)
+
+```typescript
+// ✅ 必填: runtime + agentId 同时传
+await sessions_spawn({
+  task: "<builder 任务书 + context 摘要 + ACP 模式说明>",  // 任务书在 .agent-tasks/<version>/
+  taskName: "builder-v060-url-bug",  // taskName 不含点 (per OpenClaw 限制)
+  label: "Builder ACP: v0.6.0-url-bug (FR-2)",
+  runtime: "acp",        // ← 关键
+  agentId: "claude",     // ← 关键 (不填报 target_agent_required 错)
+  cwd: "/Users/bruce/CodeProjects/syncplay",  // 可选, 让 Claude Code 默认在 syncplay 目录
+  mode: "run"
+});
+await sessions_yield();  // 等完工事件 (push-based, 不 poll)
+```
+
+### 主人在 webchat 跑 (slash command)
+
+```
+/acp spawn claude --bind here    # bind 当前对话
+/acp spawn claude --mode persistent --thread auto
+/acp status
+/acp model claude-sonnet-4-6      # 切 model 实时生效
+/acp permissions <profile>         # 切权限 profile
+/acp steer <msg>                   # 中途改方向 (native subagent 做不到!)
+/acp cancel                        # 中断当前 turn
+/acp close                         # 关 session + bindings
+```
+
+### 跟 native subagent 模式关键差异
+
+| 维度 | Native subagent (`runtime: "subagent"`) | ACP harness (`runtime: "acp"`) |
+|---|---|---|
+| **跑什么** | OpenClaw sub-agent (我派) | **外部 Claude Code CLI 进程** (acpx spawn) |
+| **session key 格式** | `agent:main:subagent:<uuid>` | `agent:claude:acp:<uuid>` (用 `agentId` 作 prefix) |
+| **认证** | OpenClaw 自己的 `ANTHROPIC_AUTH_TOKEN` | Claude Code 自己的 auth (`~/.claude/settings.json` 9 项 env, per AGENT_PRACTICES #14) |
+| **model** | 继承主 agent (MiniMax-M3) | **Claude Code 自己的 model** (用 host 配置) |
+| **tools** | OpenClaw 工具 + 我传的 task | **Claude Code 自己的 tools** (Read/Edit/Bash) |
+| **filesystem** | 间接 (subagent 跑 `claude -p`) | **直接** (Claude Code 原生 fs) |
+| **Visibility (主 agent)** | ❌ 看不到 subagent 内部 stdout | ✅ `streamTo: "parent"` 实时回流 |
+| **中途改方向** | ❌ abort + 重派 | ✅ `/acp steer <msg>` 直接 steer |
+| **cwd 怎么传** | subagent 任务书里写 `cd <path>` | `sessions_spawn({cwd: "/path"})` 参数 |
+| **permission 配在哪** | `tools.subagents.tools.allow/deny` | `plugins.entries.acpx.config.permissionMode` |
+
+### ⚠️ ACP 模式注意事项 (v1/v2/v3 教训, per AGENT_PRACTICES #18)
+
+1. **首次跑 ACP 要下载 Claude Code 适配器** —— `Other target harness adapters may still be fetched on demand with npx the first time you use them`. 后续跑就快.
+2. **必传 `agentId`** —— `runtime: "acp"` + 缺 `agentId` 报 `target_agent_required` 错.
+3. **真 permission 配置在 acpx config, 不在 sessions_spawn API** —— 我之前 v2 试过 `permissionProfile: "approve-all"` (sessions_spawn 参数), **是错的**, OpenClaw 不接受. 正确的是 `plugins.entries.acpx.config.permissionMode=approve-all`.
+4. **`permissionMode` 合法值** = `approve-reads` (默认) / `approve-all` (break-glass) / 还有其他. `approve-all` 适合 v0.6 任务 (有写文件需求).
+5. **`nonInteractivePermissions` 合法值** = 只有 `deny` / `fail`. **没有** `approve-all` (我误以为有, v2 配错).
+6. **配 config 后必重启 gateway** —— 不重启不生效.
+7. **request 不能 sandboxed** —— `OpenClaw hides runtime: "acp" until ... the current session must not be sandbox-blocked`.
+8. **OpenClaw 工具默认不暴露给 ACP** —— `OpenClaw plugin tools and built-in OpenClaw tools are not exposed to ACP harnesses by default`. ACP harness 用 Claude Code 自己的工具.
+9. **不需要 `--add-dir` flag** —— ACP 模式 Claude Code 用 host cwd, `cwd` 参数设了就行.
+10. **smoke test 是必需** —— 任何 v0.6+ 任务跑 ACP 前, 先 echo test 验证链路 (per v3 教训).
+
+### 任务书模板差异 (跟 native subagent 模式)
+
+✅ **builder 任务书可共用** —— 必读 context / 自我验证段 / 禁区 / BUILDER_DONE marker / 验收标准 / 完成后动作 全部一样.
+
+❌ **唯一区别**: 任务书里**不**写 `--add-dir /Users/bruce/CodeProjects/syncplay` (那是 native subagent 模式需要). ACP 模式 Claude Code 用 `cwd` 参数 + host 默认目录.
+
+### 何时用哪种 (v0.6+ 推荐)
+
+| 场景 | 推荐 | 理由 |
+|---|---|---|
+| **v0.6 后续子任务 (B/C)** | **ACP** | visibility 优势 + 实测比 native 快 2.3 倍 (v0.6-B: 6m15s vs v0.6-A: 14m30s) |
+| 短原子任务 (< 1 分钟) | Native subagent | ACP 首次要下 adapter 慢 |
+| 复杂长 session (多轮 edit + test + commit) | **ACP** | 中途可 `/acp steer`, 不浪费已完成工作 |
+| 非 Claude Code harness (Gemini CLI / Cursor / Droid) | **ACP** (per harness id) | ACP 是外部 harness 统一接口 |
+| 需要 OpenClaw 工具 (memory / schedule / 通知) | Native subagent | ACP 默认不暴露 OpenClaw 工具 |
+
+### 完整 ACP 失败案例 (沉淀给未来)
+
+| 版本 | 错 | 根因 |
+|---|---|---|
+| v1 | 缺 permission profile | OpenClaw 默认 `permissionMode=approve-reads` + `nonInteractivePermissions=fail` |
+| v2 | `sessions_spawn({permissionProfile: "approve-all"})` 失败 | 这个 API 参数**不存在**, OpenClaw 不接受 |
+| v3 | ✅ | 真配法 = `openclaw config set plugins.entries.acpx.config.permissionMode approve-all` + `gateway restart` |
+
+详见 `~/CodeProjects/syncplay/AGENT_PRACTICES.md #18` (完整 v1/v2/v3 故事 + 修法 + 加固规则).
+
+### 沉淀
+
+- ✅ `agentWorkflowAndTemplates/runbook.md` § "🎯 模式选择: Native subagent vs ACP harness" (commit `3f2c4d6`)
+- ✅ `AGENT_PRACTICES.md #18` (v1/v2/v3 完整故事, commit `a3c0dca`)
+- ✅ `agentWorkflowAndTemplates/control-claude.md` § "🎯 ACP harness 模式" (本段, 即将 commit)
+
+---
+
 ## ⚠️ 边界（什么情况下不推荐用 Claude Code）
 
 | 场景 | 推荐替代 |
