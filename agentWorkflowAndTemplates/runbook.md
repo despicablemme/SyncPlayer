@@ -95,6 +95,129 @@
 
 ---
 
+## 🎯 模式选择: Native subagent vs ACP harness (v0.6+ 推荐 ACP)
+
+**2026-06-09 主人决定**: 后续 v0.6+ 任务用 **ACP harness 模式** (`runtime: "acp"`) 跑 Claude Code, **不用** native subagent (`runtime: "subagent"`)。
+
+**理由** (主人原话 "后续可以直接使用 ACP harness 模式控制 claude 吗"):
+- ACP 模式让 OpenClaw **直接**控制外部 Claude Code 进程
+- 主 agent 能通过 `streamTo: "parent"` 实时看 Claude Code 进度
+- 中途可用 `/acp steer` 改方向 (native subagent 做不到)
+- 直接用 Claude Code 自己的 model + filesystem + tools (no 中间层)
+
+### 两种模式对比
+
+| 维度 | Native subagent (`runtime: "subagent"`) | ACP harness (`runtime: "acp"`) |
+|---|---|---|
+| **跑什么** | OpenClaw sub-agent (我派的 worker) | **外部 Claude Code CLI 进程** |
+| **session key 格式** | `agent:main:subagent:<uuid>` | `agent:claude:acp:<uuid>` (用 `agentId` 作 prefix) |
+| **认证** | OpenClaw 自己的 `ANTHROPIC_AUTH_TOKEN` | Claude Code 自己的 auth (`~/.claude/settings.json` 9 项 env) |
+| **model** | 继承主 agent (MiniMax-M3) | **Claude Code 自己的 model** (用 host Claude Code 配置) |
+| **tools** | OpenClaw 工具 + 我传的 task | **Claude Code 自己的 tools** (Read/Edit/Bash) |
+| **filesystem** | 间接 (subagent 跑 `claude -p`) | **直接** (Claude Code 原生 fs) |
+| **Visibility (主会话)** | ❌ 主 agent 看不到内部 (主人原痛点) | ✅ `streamTo: "parent"` 实时回流 |
+| **中途改方向** | ❌ 要 abort 重派 | ✅ `/acp steer <msg>` 直接 steer |
+| **可中断** | ✅ (`/stop`) | ✅ (`/acp cancel` 当前 turn / `/acp close` 关 session) |
+| **任务隔离 context** | ✅ 默认 isolated | ✅ 默认 isolated |
+| **失败重试** | ✅ (主 agent 重派) | ✅ (主 agent 重派) |
+
+### 何时用哪种
+
+| 场景 | 推荐模式 | 理由 |
+|---|---|---|
+| **当前 v0.6 子任务 (FR-1 已完工, FR-2/3 待跑)** | **ACP** | visibility 优势 + 主人实时看 + 中途 steer |
+| **简单原子任务** (< 1 分钟, 不需要多轮交互) | Native subagent | 简单, ACP 首次要下载 adapter, 慢 |
+| **复杂长 session 任务** (多轮 edit + test + commit) | **ACP** | 中途可 steer, 不浪费已完成工作 |
+| **非 Claude Code harness** (Gemini CLI / Cursor / Droid) | **ACP** (per harness id) | ACP 是外部 harness 的统一接口 |
+| **需要 OpenClaw 工具** (memory / schedule / 通知) | Native subagent | ACP 默认不暴露 OpenClaw 工具 |
+
+### ACP 启用步骤 (一次性配置)
+
+```bash
+# 1. 装 acpx plugin
+openclaw plugins install @openclaw/acpx
+
+# 2. 启用
+openclaw config set plugins.entries.acpx.enabled true
+
+# 3. 重启 gateway
+openclaw gateway restart
+
+# 4. 验证 (主人在 webchat 跑, 这是 chat slash command)
+# /acp doctor
+# 应输出: enabled, healthy backend, Claude Code auth present
+```
+
+**主 agent 验证** (用 API 不是 slash):
+```bash
+# 派 trivial smoke test
+sessions_spawn({
+  task: "echo hello from ACP",
+  taskName: "acp-smoke-test",
+  runtime: "acp",
+  agentId: "claude"  # 必填, 不填报 "target_agent_required"
+})
+```
+
+### 跑 ACP 任务的正确用法
+
+**主 agent 派活** (`sessions_spawn` API):
+```typescript
+// 关键: runtime + agentId 都必填
+await sessions_spawn({
+  task: "<builder 任务书 + context 摘要>",  // 任务书在 .agent-tasks/<version>/
+  taskName: "builder-v060-url-bug",  // taskName 不含点 (per #16 后修)
+  label: "Builder: v0.6.0-url-bug (FR-2)",
+  runtime: "acp",  // ← 关键
+  agentId: "claude",  // ← 关键 (不填报 target_agent_required)
+  mode: "run"
+});
+await sessions_yield();  // 等完工事件
+```
+
+**主人在 webchat 用 slash command**:
+```
+/acp spawn claude --bind here
+# 持续在 bound conversation, /acp status, /acp model <id>, /acp steer <msg>
+```
+
+### ACP 模式注意事项
+
+1. **首次跑 ACP 要下载 Claude Code 适配器** —— `Other target harness adapters may still be fetched on demand with npx the first time you use them`
+2. **request 不能 sandboxed** —— `OpenClaw hides runtime: "acp" until ... the current session must not be sandbox-blocked`
+3. **ACP 默认不暴露 OpenClaw 工具** —— `OpenClaw plugin tools and built-in OpenClaw tools are not exposed to ACP harnesses by default` (要显式 enable MCP bridges)
+4. **model 跟 Claude Code host 配置走** —— 不是 OpenClaw 的 model
+5. **权限 profile 需配** —— `Non-interactive sessions cannot click native permission prompts, so write/exec-heavy coding runs usually need an ACPX permission profile`
+6. **首次跑比较慢** —— 下载 adapter + 验证 + spawn, 后续快
+
+### 跟 native subagent 模式**主 agent 任务书模板差异**
+
+任务书 (`tasks/<version>-<task>-builder.md`) **可以共用** — builder 任务书里的:
+- ✅ 必读 context (绝对路径)
+- ✅ 自我验证段 (Claude Code 读完 stdout 输出)
+- ✅ 禁区 (docs/STATUS.md 等)
+- ✅ BUILDER_DONE 标记
+- ✅ unit test 跑通
+
+**完全一样**。唯一区别: subagent 任务书里**不**用 `--add-dir` flag (ACP 模式 Claude Code 用 host cwd)。
+
+### v0.6+ 推荐策略
+
+| 阶段 | 模式 |
+|---|---|
+| v0.6 子任务 B (FR-2 URL bug) | **ACP** (新策略, 验证) |
+| v0.6 子任务 C (FR-3 视频解耦) | **ACP** (per B 体验决定) |
+| v0.6.1 / v0.7+ | **统一 ACP** |
+| 简单调试 / 实验 | Native subagent (更轻) |
+
+### 沉淀
+
+- **AGENT_PRACTICES.md 后续加 #18**: ACP 启用步骤 + agentId 必填 + session key 格式区别
+- **control-claude.md 加 ACP 段**: 与 native subagent 对比, 怎么用 `runtime: "acp"`
+- **runbook.md 已有本段** (就是当前看的)
+
+---
+
 ## 📊 完整 3 阶段流程图
 
 ```
