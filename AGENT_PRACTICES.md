@@ -22,6 +22,7 @@
 | 8 | [没预期 GitHub Actions artifact 在国内 Azure Blob 慢](#8-没预期-github-actions-artifact-在国内-azure-blob-慢) | v0.5.1 release | — |
 | 9 | [诊断时不亲自跑命令拿证据](#9-诊断时不亲自跑命令拿证据) | v0.5.0 dmg 装不上 | #13, #14 |
 | 10 | [派 subagent 失败后没立刻自己接手](#10-派-subagent-失败后没立刻自己接手) | v0.5.2 release 监控 | #20 |
+| 11 | [收到主人 export 的 token 误以为已配好](#11-收到主人-export-的-token-误以为已配好) | v0.5.2 push | #1, #21 |
 
 ---
 
@@ -391,6 +392,129 @@
 
 ---
 
+---
+
+## 11. 收到主人 export 的 token 误以为已配好
+
+### 情境
+
+**时间**：2026-06-09  
+**阶段**：AGENT_PRACTICES.md commit 完后要 `git push origin main`  
+**链路**：主人 2026-06-08 跟我说"新 token 已经 export 给你了" → 我今天 push 时才**真正**去查 → 发现：
+
+- 主会话 env 里**没有** `GH_TOKEN` / `GITHUB_TOKEN`
+- `~/.zshrc` / `~/.zprofile` / `~/.netrc` / `~/.git-credentials` / `~/.ssh/` 都没新 token
+- macOS Keychain 里 github.com 凭证还是 **5月16日那个旧 token**（`ghp_hO...`）
+
+### 错误链
+
+1. 主人昨天 export 完就放下了（session 死了，env 消失）— 主人侧问题
+2. **我**昨天收到"export 完了"消息时，**没主动**：
+   - 把 token 写进 `~/.zshrc` 持久化
+   - 用 `git credential-osxkeychain store` 存进 Keychain
+   - 写进 `~/.netrc`（跨平台备选）
+3. 今天 push 失败，我先怀疑网络（实际就是网络层问题），等查到 Keychain 才意识到：**根本没用上主人给的新 token** — 钥匙串里还是 5月16日那个
+4. **更糟**：查 Keychain 时用了 `security find-internet-password -s "github.com" -g`（`-g` 显式打 password）— 完整 token 暴露到 webchat transcript
+
+### 根因
+
+**"export = 已配置" 是严重错觉**。原因：
+
+- `export VAR=xxx` 只活在**当前 shell 进程**及其子进程
+- 父 shell 死了（webchat session 结束），env 变量跟着消失
+- OpenClaw gateway 是从 launchd / 系统环境继承 env，**不**从某个 webchat session 继承
+- 主 agent（我）的子进程（subagent / exec）会从我的 env 继承，但我的 env **来自** OpenClaw gateway — 不是主人 webchat session
+
+→ 主人"export 给我"实际是 export 给了**那一刻**的 webchat shell 进程。那个进程早死了。
+
+### 正确流程
+
+**主人** 给我凭证后，**我**必须**立刻**做下列至少一项：
+
+| 目标 | 命令 | 适用 |
+|---|---|---|
+| macOS Keychain（git 自动用） | `git credential-osxkeychain store` 配合 stdin | 日常 git push（当前 macOS 环境） |
+| shell 持久化 | 追加到 `~/.zshrc` 或 `~/.zprofile`（注意：非交互 shell 不 source 这些） | 临时用 |
+| 跨平台 | 写到 `~/.netrc`（chmod 600） | CI / 跨机器 |
+| **永久** | 生成 SSH key + 推公钥到 GitHub + `git remote set-url origin git@github.com:...` | ⭐ **最推荐** |
+
+### 推论
+
+- 任何"凭证已就位"声明，**必须**用 `git credential-osxkeychain get` 或 `security find-internet-password -s github.com` 验证**之前**不许说
+- `security -g` 拿密码 = **故意**显示明文，只在确实需要时用
+- 主人问"为什么没配好"时，先**自己**跑 `git credential-osxkeychain get` 查存了什么，不要凭印象答
+
+### 红线（同样适用所有 subagent）
+
+- ❌ 不要把"主人 export 了"等同于"凭证生效"
+- ❌ 不要用 `security ... -g` 除非必要；如必要，**打码**显示
+- ❌ 不要假设凭证会自动跨 session 持久化
+- ✅ 收到凭证 → 立刻持久化 + 立刻用 `git credential-osxkeychain get` 验证
+
+---
+
 *维护：Jarvis*
 *协作：主人（Bruce）*
-*最后更新：2026-06-08（v0.5.2 release 完工当天）*
+*最后更新：2026-06-09（token 配置失职教训 + 顺手升级 SSH key 方案）*
+
+## 12. macOS 系统代理 ≠ git 代理（开了代理但 git 不走）
+
+### 情境
+
+**时间**：2026-06-09（v0.5.2 push 阶段）  
+**问题链**：push 反复 75s timeout → 主人说"我一直在开代理" → 我**没第一时间**意识到 git 不读 macOS 系统代理
+
+### 错误链
+
+1. 主人 6/8 v0.5.2 tag push 成功过，但 6/9 push 不出去
+2. 我查了 `curl` 直连 github.com、web_fetch github.com、git push —— 全部超时
+3. 主人说"我一直在开代理"，我**没立刻**判断"git 不读 macOS 系统代理面板"
+4. 等我手动跑 `curl -x http://127.0.0.1:7897 https://github.com` 才证实：代理**一直在跑**（Vortex 客户端 pid 63601 监听 7897）、**完全能通** github.com（HTTP 200 / 0.66s）
+5. 根因：macOS 系统偏好设置里的"Web 代理 / HTTPS 代理 / SOCKS 代理"是 **AppKit 层**配置，**只对走系统代理设置的 app 生效**（Safari / 系统设置 / 部分 GUI app）
+6. 命令行工具（git / curl / npm / brew / ssh）**不读**这个面板，需要 shell 配 `HTTPS_PROXY` env 或 git config 显式指定
+
+### 根因
+
+macOS 系统代理面板的生效范围：
+- ✅ Safari / Chrome（部分情况）
+- ✅ App Store / Mail 等系统 app
+- ✅ 部分 GUI 工具（如果它们读 `SCDynamicStore`）
+- ❌ **所有命令行工具**（git / curl / npm / brew / ssh / python pip）
+- ❌ 大部分 npm package 的 postinstall script
+- ❌ Docker daemon（需要单独配）
+
+### 正确流程
+
+**主人说"代理开着"时，agent 必须立即**：
+
+1. **不要直接信**"系统代理开着" — 对**命令行**通常没用
+2. **验证手段**（任选一）：
+   - `curl -sS -o /dev/null -w "%{http_code}\n" --max-time 5 https://github.com` 看直连
+   - `curl -x http://127.0.0.1:<port> https://github.com` 看代理端口
+   - `lsof -nP -iTCP:<port> -sTCP:LISTEN` 看端口监听
+3. **如果代理真的在跑**（端口有人听 + curl 走代理能通），**立刻配 git 代理**：
+
+```bash
+# 条件性代理（推荐，只对 GitHub 走）
+git config --global 'http.https://github.com.proxy' 'http://127.0.0.1:<port>'
+
+# 全局代理（其他仓库也会走）
+git config --global http.proxy 'http://127.0.0.1:<port>'
+git config --global https.proxy 'http://127.0.0.1:<port>'
+```
+
+4. **配完立刻用 `git push` 试一次**，不要等下次 push
+
+### 推论
+
+- **任何"凭证已就位"或"代理已开启"的声明，agent 都要立刻用对应工具验证**（per #11 教训）
+- **不要把"主人说开了"等同于"工具能用到"** —— 跨层配置容易掉链子
+- macOS 系统代理面板对 agent 工作流**几乎没用**，长期用 SSH key + 显式 git proxy 是最稳的
+
+### 配合 #11 一起用
+
+| 场景 | 必修 |
+|---|---|
+| 主人给 PAT token | #11：立刻 `git credential-osxkeychain store` + `git credential-osxkeychain get` 验证 |
+| 主人说开了代理 | #12：立刻 `curl -x` 验证端口 + `git config --global http.*.proxy` 配 + 跑一次 |
+| 主人说 VPN 连上了 | 同样要 `curl --interface` 或直接 `git push` 验 |
