@@ -9,7 +9,84 @@
 
 ---
 
-## 会议 #005 — 2026-06-09 v0.6 计划制定
+## 会议 #006 — 2026-06-09 v0.6 完工纪要 (置顶)
+
+**参会人员**:主人 (Bruce)、Jarvis (主控)、Claude Code (ACP harness 实例 5 个)
+**主题**:v0.6 体验优化 + bug 修复 — 完工回顾
+**耗时**:约 1.5 小时 (含 plan 阶段 A + 3 子任务阶段 B + 阶段 C 文档落地)
+**阶段**:v0.6 阶段 C (完工后 docs 统一更新)
+
+### 一、交付清单 (5 commit 全部 PASS)
+
+| Commit | 子任务 | 模式 | 验收 |
+|---|---|---|---|
+| `5675750` | FR-1 房间退出 + 重新加入 | Native subagent | ✅ (跳过 Tester) |
+| `ef56139` | FR-2 修 URL bug | ACP harness | ✅ |
+| `2b72bcc` | v0.6-B test report | ACP Tester | ✅ 12 PASS / 1 N/A / 0 FAIL |
+| `8e9d767` | FR-3 解耦视频 + 视频不匹配 + 状态机重构 | ACP harness | ✅ |
+| `90f1b95` | v0.6-C test report | ACP Tester | ✅ 全部 PASS |
+
+### 二、关键技术决策
+
+1. **架构改进**:状态机从 4 态扩到 6 态 (`no_room` / `connecting` / `in_room_no_video` / `in_room_waiting_peer_video` / `in_room_synced` / `in_room_mismatch`). 新增 `src/shared/room-state.js` (RoomStateMachine) + `src/shared/video-match.js` (videosMatch + describeVideo + normalizeUrl)
+2. **模式升级**:主人 (2026-06-09) 决定 v0.6+ 用 ACP harness 模式 (`runtime: "acp"`) 跑 Claude Code, 替代 native subagent. 未来所有 ACP spawn 必加 `streamTo: "parent"` (per AGENT_PRACTICES #19)
+3. **ACP 启用 3 步**:`openclaw plugins install @openclaw/acpx` + `config set plugins.entries.acpx.enabled true` + `openclaw config set plugins.entries.acpx.config.permissionMode approve-all` + `gateway restart`
+4. **任务实例放 `.agent-tasks/` 不上库** (per runbook 段 "文件上库决策规则", 主人 2026-06-09 确认方案 1)
+
+### 三、遇到的问题 + 修法
+
+1. **ACP v1/v2/v3 smoke test 失败**:
+   - v1: 缺 permission profile, OpenClaw 默认 `permissionMode=approve-reads` + `nonInteractivePermissions=fail`
+   - v2: 我**编了** `sessions_spawn({permissionProfile: "approve-all"})` (OpenClaw **不**接受这个 API 参数)
+   - v3 ✅: 正确配法 = `openclaw config set plugins.entries.acpx.config.permissionMode approve-all` (真配在 acpx config, 不在 sessions_spawn API)
+   - **沉淀**: AGENT_PRACTICES #18 完整故事
+
+2. **`/acp status` 误判**:我之前文档说 "主人在 webchat 直接打 /acp status 看进度", **错**——`/acp status` 是 OpenClaw Gateway 命令, **主 agent 调**, **不**是给用户. 主人实测报错 `Session is not ACP-enabled: agent:main:main`
+   - **真 visibility 渠道**: 主 agent 主动汇报 (完工事件) + `subagents` 工具查询 (on-demand)
+   - **修法**: 未来 ACP spawn 必加 `streamTo: "parent"` (主 agent 收实时 stream, 关键节点汇报)
+   - **沉淀**: AGENT_PRACTICES #19 完整故事
+
+3. **edit 工具破坏 CJK 标点**:之前用 `edit` 工具改 docs/AGENTS.md 时意外把全角"？"改成半角"?"等
+   - **修法**: 用 Python 直接 write, **不**用 edit 工具做大段中文改动
+   - **沉淀**: AGENT_PRACTICES #13
+
+4. **git push SSL_ERROR_SYSCALL 假阳性**: `LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443` 但实际 push 成功
+   - **修法**: push 后必 `git fetch origin main && git rev-parse main origin/main` 验证, 不只信 git 输出
+   - **沉淀**: AGENT_PRACTICES #15
+
+### 四、runbook 阶段流程 3 阶段实战
+
+- **阶段 A (plan/讨论)**: 主人说目标 → 复述理解 → 写 plan 文档 (MEETINGS/REQUIREMENTS/ROADMAP) → commit + push
+- **阶段 B (实现)**: 拆任务 → 写任务书 (.agent-tasks/v0.6.0/...) → 派 Builder (Native subagent 跑 A, ACP 跑 B/C) → 派 Tester (独立 context 跑 B/C) → 验收
+- **阶段 C (完工)**: 全部子任务 PASS 后统一更新 docs/CHANGELOG/STATUS/ROADMAP/ARCHITECTURE/MEETINGS → bump package.json → 1 commit + push 5 个 commit 一次
+
+### 五、阶段 C 待办清单 (本会议产出)
+
+- [x] CHANGELOG.md 加 v0.6.0 段 (FR-1/2/3 + ACP 模式升级 + 5 commit 列表)
+- [x] STATUS.md v0.6 → ✅ Shipped
+- [x] ROADMAP.md v0.6 → ✅, v0.7 → 🎯 next
+- [x] ARCHITECTURE.md 加 6 态状态机 + 视频匹配 + 解耦流程图
+- [x] MEETINGS.md 加 v0.6 完工纪要 (本会议, 置顶 per 倒序规则)
+- [x] package.json + desktop/package.json bump 到 0.6.0 (滞后问题, v0.5.x 一直是主人写)
+- [x] git push 5 commit + 阶段 C 1 commit = 6 commit 一次
+
+### 六、相关链接
+
+- `docs/CHANGELOG.md` — v0.6.0 release 段
+- `docs/STATUS.md` — v0.6.0 Shipped 状态
+- `docs/ROADMAP.md` — v0.6 → ✅, v0.7 → 🎯
+- `docs/ARCHITECTURE.md` — 6 态状态机 + 视频匹配架构
+- `docs/REQUIREMENTS.md` — FR-1/2/3 详细需求
+- `agentWorkflowAndTemplates/runbook.md` — 3 阶段流程
+- `agentWorkflowAndTemplates/control-claude.md` — ACP mode + streamTo:parent
+- `AGENT_PRACTICES.md #18` — ACP 启用 v1/v2/v3 完整故事
+- `AGENT_PRACTICES.md #19` — /acp status 误判 + 必加 streamTo:parent
+- `AGENT_PRACTICES.md #13` — edit 工具破坏 CJK 标点
+- `AGENT_PRACTICES.md #15` — git push SSL_ERROR_SYSCALL 假阳性
+
+---
+
+## 会议 #005 — 2026-06-09 v0.6 计划制定## 会议 #005 — 2026-06-09 v0.6 计划制定
 
 **参会人员**：主人（Bruce）、Jarvis（主控）
 **主题**：v0.6 体验优化与 bug 修复 — 制定计划

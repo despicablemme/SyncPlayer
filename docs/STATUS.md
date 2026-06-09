@@ -9,8 +9,8 @@
 
 ## 🚦 一句话状态
 
-**当前版本：v0.5.1**（已发布 — 修 asar 结构 + 走 GitHub Actions 跨平台出 dmg/exe/AppImage）
-**下一目标：v0.6.x** — Linux AppImage 验证 + macOS 用户安装文档化（quarantine 提示）
+**当前版本：v0.6.0 (Shipped 2026-06-09)** — 体验优化 + bug 修复: FR-1 房间退出 + 重新加入 / FR-2 修 URL 加载 bug / FR-3 解耦视频与房间 + 视频不匹配提示
+**下一目标：v0.7.x** — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
@@ -27,7 +27,7 @@
 
 ---
 
-## ✅ v0.5.1 已完成（已发布，2026-06-08）
+## ✅ v0.5 / v0.5.1 已完成（历史）（已发布，2026-06-08）
 
 **Commit**：`e050b39`
 **Tag**：`v0.5.1`（已推 GitHub）

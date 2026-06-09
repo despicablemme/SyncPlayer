@@ -7,6 +7,42 @@
 
 ---
 
+## v0.6.0 (2026-06-09) — 体验优化 + bug 修复
+
+**新功能**:
+- 🆕 **FR-1 房间生命周期** — 加"退出房间"按钮, 跟"重新加入另一房间"流程, 退出后用户能立即输入新房间号加入另一房间
+- 🆕 **FR-3 视频解耦 + 视频不匹配提示** — 房间生命周期跟视频加载完全解耦 (任意顺序都正常), 两端都加载后自动校验视频信息 (URL / 文件名 / 时长三重), 不匹配时 UI 状态区红色提示 "视频不匹配, 无法同步进度"
+
+**修复**:
+- 🐛 **FR-2 修视频 URL 加载 bug** — 5 个具体修复: src 切换没 reset / 错误信息太笼统 / HLS 黑屏无提示 / 二次 load() 触发 race / 空文件名 + query string
+
+**架构改进**:
+- 状态机从 4 态扩到 6 态: `no_room` / `connecting` / `in_room_no_video` / `in_room_waiting_peer_video` / `in_room_synced` / `in_room_mismatch`
+- 新增 `src/shared/room-state.js` (RoomStateMachine 类, UMD)
+- 新增 `src/shared/video-match.js` (videosMatch + describeVideo + normalizeUrl, UMD)
+- 跟子任务 A (FR-1) 状态机协调: 叠加而非替换 (exitRoom + destroyed 守卫 + attemptReconnect 全部保留)
+
+**测试**:
+- 单元测试: `npm test` 88/88 pass (60 新 + 28 旧, 126ms)
+- v0.6-B (FR-2) Tester: 12 PASS / 1 N/A / 0 FAIL (真实 headless Chromium 跑过 URL / 错误 / 元数据 / 现有功能)
+- v0.6-C (FR-3) Tester: 全部 PASS (状态机 / 解耦 / 匹配 / 跟 A 协调 / 浏览器测试)
+
+**模式升级**:
+- 主人 (2026-06-09) 决定: v0.6+ 任务用 **ACP harness 模式** (`runtime: "acp"`) 跑 Claude Code, 替代 native subagent
+- 未来所有 ACP spawn 必加 `streamTo: "parent"` (per AGENT_PRACTICES #19)
+- ACP 启用 3 步: `openclaw plugins install @openclaw/acpx` + `config set plugins.entries.acpx.enabled true` + `openclaw config set plugins.entries.acpx.config.permissionMode approve-all` + `gateway restart`
+
+**Commits (本版本)**:
+- `5675750` feat(v0.6): FR-1 房间退出 + 重新加入另一房间
+- `ef56139` fix(v0.6): FR-2 修视频 URL 加载 bug
+- `2b72bcc` test(v0.6.0): add test report for url-bug
+- `8e9d767` feat(v0.6): FR-3 解耦视频与房间 + 视频不匹配提示 + 状态机重构
+- `90f1b95` test(v0.6.0): add test report for video-decouple
+
+详见 [MEETINGS.md 会议 #006 完工纪要](./MEETINGS.md) + [REQUIREMENTS.md FR-1/2/3](./REQUIREMENTS.md) + [AGENT_PRACTICES.md #18/#19](../AGENT_PRACTICES.md)
+
+---
+
 ## [未发布]
 
 ### 下一版本 v0.6.x 计划（2026-06-08）

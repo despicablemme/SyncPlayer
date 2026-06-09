@@ -255,6 +255,116 @@ P2P 直连失败（对称 NAT 等）：
 
 ---
 
+## 房间状态机 (v0.6.0 新增, FR-3)
+
+**6 态 RoomStateMachine** (`src/shared/room-state.js`, UMD):
+
+```
+       ┌──── exitRoom() ────┐
+       ▼                    │
+   no_room                   │
+       │ startSession()      │
+       │ (createBtn/joinBtn) │
+       ▼                    │
+   connecting                │
+       │ conn.on('open')     │
+       │ peer 信息 ready     │
+       ├─────────────────────┤
+       ▼                    │
+   in_room_no_video ◄───────┤
+       │ (peer 也 loaded 视频)│
+       ├─────────────────────┤
+       ▼                    │
+   in_room_waiting_peer_video
+       │ (自己也 loaded)     │
+       ├─────────────────────┤
+       ▼                    │
+   in_room_synced            │
+       │ videosMatch() = false
+       ├─────────────────────┤
+       ▼                    │
+   in_room_mismatch          │
+       │ (peer lost)         │
+       └─→ connecting        │
+```
+
+**关键 API**:
+- `RoomStateMachine.STATES` — 6 态常量 (`NO_ROOM` / `CONNECTING` / `IN_ROOM_NO_VIDEO` / `IN_ROOM_WAITING_PEER_VIDEO` / `IN_ROOM_SYNCED` / `IN_ROOM_MISMATCH`)
+- `new RoomStateMachine()` — 实例, 内部用 `Object.freeze` 防止状态值被改
+- `roomState.setState(newState)` — 设新状态, 触发 listeners
+- `roomState.subscribe(fn)` — 订阅状态变化, 触发 UI 更新
+- `roomState.canSync()` — 只在 `IN_ROOM_SYNCED` 返回 true, engine 据此 gate 同步指令
+
+**与子任务 A (FR-1 房间退出) 协调**: A 加的 `exitRoom()` / `destroyed` 守卫 / `attemptReconnect` **全部保留**; C 在 A 基础上**叠加**状态机, **不**替换.
+
+## 视频匹配 (v0.6.0 新增, FR-3)
+
+**`videosMatch(a, b)`** (`src/shared/video-match.js`, UMD):
+
+```javascript
+function videosMatch(a, b) {
+  if (!a || !b) return false;       // 任一方没加载 = 不算匹配
+  if (a.url && b.url) return a.url === b.url;  // URL 相同
+  if (a.fileName && b.fileName) return a.fileName === b.fileName;  // 文件名相同 (本地)
+  if (a.duration && b.duration) return Math.abs(a.duration - b.duration) < 1;  // 时长差 < 1s
+  return false;                     // 任一不一致 = 不匹配
+}
+```
+
+**匹配顺序**: URL → fileName → duration. **第一个匹配就返回**, **不** fallback.
+
+**为什么这个顺序**:
+- URL 优先: 同一 URL (含 query) 几乎确定是同一视频
+- fileName 次之: 本地文件无 URL, 同一文件名 (含 extension) 高度可能同一视频
+- duration 兜底: 不同 URL/文件名但时长差 < 1s 高度可能同一视频
+- **不** fallback (任一不一致 = 不匹配): 防止"看似匹配实际不匹配"的 false positive
+
+**链路**:
+- `loadedmetadata` → `setMyVideoInfo({url, fileName, duration})` → `conn.send({type: 'video_info', ...})`
+- 收端 `conn.on('data')` 过滤 `type === 'video_info'` → `onPeerVideoInfo(data)` → 双方都 loaded 时调 `videosMatch`
+- 匹配: `roomState.setState(IN_ROOM_SYNCED)` + `engine.start()`
+- 不匹配: `roomState.setState(IN_ROOM_MISMATCH)` + UI 状态区红色提示 + **不**发 sync 指令
+
+## 关键流程 (v0.6.0 更新)
+
+### 6. 视频加载与房间解耦 (v0.6.0 新增, FR-3)
+
+**之前 (v0.5.x)**: 必须**先**加载视频才能进房 (`ensureVideoReady()` 在 `startSession()` 里)
+**现在 (v0.6.0)**: 任意顺序都行 (进房→加载 / 加载→进房 / 进房→加载→退房→进新房)
+
+```
+[用户]                     [App.js]                    [RoomStateMachine]            [SyncEngine]
+   │ 加载视频                 │                                │                            │
+   │──► loadVideo(file)──────►│                                │                            │
+   │                          │─ video.loadedmetadata ────────►│                            │
+   │                          │─ setMyVideoInfo(info)          │                            │
+   │                          │─ conn.send({type:video_info}) ──────────────────────────────► peer
+   │                          │                                │                            │
+   │ 创/进房                  │                                │                            │
+   │──► startSession()───────►│                                │                            │
+   │                          │─ roomState.setState(CONNECTING)─►│                          │
+   │                          │─ connMgr = new PeerJS(...)     │                            │
+   │                          │                                │                            │
+   │                          │ conn.on('open')                │                            │
+   │                          │─ roomState.setState(IN_ROOM_NO_VIDEO)►│                       │
+   │                          │─ onPeerVideoInfo(peer.info)   │                            │
+   │                          │─ videosMatch(my, peer) ────►  match: IN_ROOM_SYNCED        │
+   │                          │                                │─ engine.start()            │
+   │                          │                                │         (gate by canSync)  │
+   │                          │                                │                            │
+   │ 退出房间                 │                                │                            │
+   │──► exitBtn click────────►│                                │                            │
+   │                          │─ connMgr.destroy()             │                            │
+   │                          │─ roomState.setState(NO_ROOM) ─►│                           │
+   │                          │- 显示 createBtn/joinBtn       │                            │
+   │                          │- video 不清空 (per 任务书约束)  │                            │
+   │                          │                                │                            │
+   │ 重新进房                 │                                │                            │
+   │──► startSession()───────►│                                │                            │
+   │                          │- myVideoInfo 仍在, 进 IN_ROOM_NO_VIDEO   │                │
+   │                          │- (peer 也 loaded) → IN_ROOM_SYNCED   │                │
+```
+
 ## 关键设计决策
 
 | 决策 | 选择 | 理由 |

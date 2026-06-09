@@ -1,6 +1,6 @@
 {
   "name": "syncplay",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "description": "异地同步看片神器 — 两人异地同时播放同一视频，进度实时同步",
   "main": "src/server/server.js",
   "directories": {
