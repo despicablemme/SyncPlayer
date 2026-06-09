@@ -31,12 +31,38 @@
 
 ## 必读 context（先读完再动手）
 
-1. `~/CodeProjects/syncplay/AGENT_PRACTICES.md` —— **必读**，SyncPlay 项目的所有教训（特别是 #1-#12）
-2. `~/CodeProjects/syncplay/docs/STATUS.md` —— 项目当前状态
-3. `~/CodeProjects/syncplay/docs/ROADMAP.md` —— 项目目标
-4. `~/CodeProjects/syncplay/tasks/{{TASK_ID}}-context.md` —— 本任务专属 context 摘要
-5. （如相关）`~/CodeProjects/syncplay/docs/ARCHITECTURE.md` —— 架构说明
-6. （如相关）`~/CodeProjects/syncplay/docs/CHANGELOG.md` —— 历史版本记录
+1. `/Users/bruce/CodeProjects/syncplay/AGENT_PRACTICES.md` —— **必读**，SyncPlay 项目的所有教训（特别是 #1-#12）
+2. `/Users/bruce/CodeProjects/syncplay/docs/STATUS.md` —— 项目当前状态
+3. `/Users/bruce/CodeProjects/syncplay/docs/ROADMAP.md` —— 项目目标
+4. `/Users/bruce/CodeProjects/syncplay/tasks/{{TASK_ID}}-context.md` —— 本任务专属 context 摘要
+5. （如相关）`/Users/bruce/CodeProjects/syncplay/docs/ARCHITECTURE.md` —— 架构说明
+6. （如相关）`/Users/bruce/CodeProjects/syncplay/docs/CHANGELOG.md` —— 历史版本记录
+
+---
+
+## 自我验证 (必做, 不做不要动手)
+
+**你必须**在读完必读 context 后, **stdout 输出**这段(证明你真的读了):
+
+```
+✓ 已读 AGENT_PRACTICES.md (<N> 行, 关键教训: #X #Y #Z)
+✓ 已读 docs/STATUS.md (<N> 行, 当前阶段: <一句话>)
+✓ 已读 docs/ROADMAP.md (<N> 行, 相关决策: <一句话>)
+✓ 已读 tasks/<task-id>-context.md
+✓ 任务目标复述: <用你自己的话复述本任务要做什么>
+```
+
+**如果任何文件读失败** (路径错 / 不在 allowed dir / 权限不够), **立刻报告失败并停止**:
+```
+✗ 读 <文件路径> 失败: <错误>
+可能原因: 路径错 / working dir 不在 --add-dir 列表 / 权限不够
+请主 agent 修
+```
+
+**为什么**:
+- 主人问"Claude Code 知道读什么吗"是硬问题 (per AGENT_PRACTICES #16)
+- 主 agent 验收时**必须**看你 stdout 里有这段, 不然 = 你没读 = 任务不合格
+- working dir 默认是当前 shell 目录, 不会自动包含 syncplay — 主 agent 必须用 `--add-dir /Users/bruce/CodeProjects/syncplay` 派你
 
 ---
 

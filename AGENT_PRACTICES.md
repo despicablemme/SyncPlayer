@@ -745,6 +745,85 @@ fi
 - AGENT_PRACTICES #15 (本条): 抖出新形态 - SSL 假阳性
 - 主 agent 行动：push 后**必须** fetch 验证，不靠 git 单一输出
 
+
+## 16. Claude Code 默认 working dir 限制 — 必须 --add-dir (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09（v0.6 工作流刚配完 MiniMax 后, 主人问"Claude Code 知道读什么吗"）  
+**测试**：我跑 `claude -p "读 /Users/bruce/CodeProjects/syncplay/AGENT_PRACTICES.md, 然后只回我 3 件事..."`  
+**结果**：Claude Code 拒绝：
+
+> 抱歉,无法读取该文件。该路径 `/Users/bruce/CodeProjects/syncplay/AGENT_PRACTICES.md`
+> 不在当前会话允许的工作目录内(当前仅允许 `/Users/bruce/.openclaw/workspace`),
+> 所以 Read 和 wc 都被拦截了。
+
+**根因**：Claude Code 默认只允许读**当前 shell 所在目录**（我的所有命令都在 `~/.openclaw/workspace` 跑），syncplay 文件**根本读不到**。
+
+### 影响范围
+
+- 整个 `claude -p` 工作流（subagent 派 Builder/Tester）如果不加 `--add-dir` 全部**读不到** syncplay 文件
+- 任务书里写的"必读 AGENT_PRACTICES.md" 等于**空话** —— Claude Code 根本看不到那些文件
+
+### 解法
+
+`claude -p` 加 `--add-dir` flag 显式声明允许的目录：
+
+```bash
+# 关键: --add-dir 必须在 -p 之前
+claude --add-dir /Users/bruce/CodeProjects/syncplay -p "<任务 prompt>"
+
+# 多目录
+claude --add-dir /Users/bruce/CodeProjects/syncplay \
+        --add-dir /Users/bruce/Documents/KnowLedgeDatabase \
+        -p "<任务 prompt>"
+```
+
+**验证**(2026-06-09 实测)：
+
+```bash
+$ claude --add-dir /Users/bruce/CodeProjects/syncplay -p "读 .../AGENT_PRACTICES.md, 只回我 3 件事..."
+1. 757 行
+2. 第 1 个教训: v04-commander 静默 21 小时没人查
+3. 第 15 个教训: git push 报 LibreSSL SSL_ERROR_SYSCALL 不一定真失败
+```
+
+✅ Claude Code 真的读了! wc 输出 757 行 vs 实际 756 行(差 1 是末尾换行).
+
+### 必须改的地方
+
+| 文件 | 改什么 |
+|---|---|
+| `agentWorkflowAndTemplates/control-claude.md` | subagent 派 Builder/Tester 示例**全部加 `--add-dir`** |
+| `agentWorkflowAndTemplates/templates/builder-task.md` | "必读 context" 改**绝对路径**(`/Users/bruce/...`) 不依赖 `~` 展开 |
+| `agentWorkflowAndTemplates/templates/tester-task.md` | 同上 |
+| `agentWorkflowAndTemplates/control-claude.md` | 加"主 agent 派活时**必须**传 `--add-dir`"红线 |
+
+### 加固 (给任务书加 self-verification)
+
+任务书**必加**这段(强迫 Claude Code 证明它读了):
+
+```markdown
+## 自我验证 (必做, 不做不要动手)
+
+读完必读 context 后, **stdout 输出**:
+- "✓ 已读 AGENT_PRACTICES.md (N 行, 关键教训: #X #Y #Z)"
+- "✓ 已读 docs/STATUS.md (N 行, 当前阶段: <一句话>)"
+- "✓ 已读 tasks/<task-id>-context.md"
+- "✓ 任务目标复述: <用你自己的话复述本任务要做什么>"
+
+如果**任何文件读失败**(路径错/不在 allowed dir), **立刻报告**并停止.
+```
+
+### 关联
+
+- AGENT_PRACTICES #15: git push 假阳性 (跟工作流无关, 是 git bug)
+- `agentWorkflowAndTemplates/control-claude.md`: 已加 --add-dir 用法
+- `agentWorkflowAndTemplates/templates/builder-task.md`: 已加绝对路径 + self-verification
+- MEMORY.md #14: 主人求证时必须有切实证据 (主人这一问就是这种场景)
+
+---
+
 ---
 
 ---

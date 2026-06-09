@@ -45,7 +45,36 @@ subagent-orchestrator 抓 stdout
 
 **subagent 任务书模板**（主 agent 给 subagent 派的，不是给 Claude Code 派的）：
 
-```markdown
+```markdown### ⚠️ 必加 `--add-dir` flag (2026-06-09 新增红线)
+
+**`claude -p` 默认只允许读当前 shell 所在目录**。如果不加 `--add-dir`, Claude Code **读不到** syncplay 文件, 任务书里的"必读 AGENT_PRACTICES.md" 等于空话.
+
+**修法 (subagent 派活命令必须改成)**:
+
+```bash
+# ❌ 之前(读不到 syncplay 文件)
+claude -p "$(cat tasks/v0.6.0-foo-builder.md tasks/v0.6.0-foo-context.md)"
+
+# ✅ 现在(显式加 --add-dir)
+claude --add-dir /Users/bruce/CodeProjects/syncplay \
+       -p "$(cat tasks/v0.6.0-foo-builder.md tasks/v0.6.0-foo-context.md)"
+```
+
+**多目录**(如需要读其他项目):
+
+```bash
+claude --add-dir /Users/bruce/CodeProjects/syncplay \
+       --add-dir /Users/bruce/Documents/KnowLedgeDatabase \
+       -p "..."
+```
+
+**flag 顺序**:`--add-dir` 必须在 `-p` 之前, 否则报"Input must be provided either through stdin or as a prompt argument"。
+
+**实证** (2026-06-09 主 agent 跑过): 加 `--add-dir` 后 Claude Code 能读 757 行 AGENT_PRACTICES.md, 不加报"路径不在 allowed dir"。
+
+详见 `~/CodeProjects/syncplay/AGENT_PRACTICES.md #16`。
+
+
 ## 身份
 你是 Builder orchestrator。Jarvis 派你跑 Claude Code 完成 Builder 任务。
 
