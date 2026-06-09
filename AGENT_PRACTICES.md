@@ -23,6 +23,8 @@
 | 9 | [诊断时不亲自跑命令拿证据](#9-诊断时不亲自跑命令拿证据) | v0.5.0 dmg 装不上 | #13, #14 |
 | 10 | [派 subagent 失败后没立刻自己接手](#10-派-subagent-失败后没立刻自己接手) | v0.5.2 release 监控 | #20 |
 | 11 | [收到主人 export 的 token 误以为已配好](#11-收到主人-export-的-token-误以为已配好) | v0.5.2 push | #1, #21 |
+| 12 | [macOS 系统代理 ≠ git 代理](#12-macos-系统代理--git-代理开了代理但-git-不走) | v0.5.2 push | #12, #13, #14 |
+| 13 | [edit 工具改大段中文文档再次踩坑](#13-edit-工具改大段中文文档再次踩坑-教训2026-06-09) | v0.6 准备 | #19 |
 
 ---
 
@@ -354,6 +356,8 @@
 
 ---
 
+---
+
 ## 📊 错误模式总结（横向看）
 
 ### 高频错误类别
@@ -514,7 +518,77 @@ git config --global https.proxy 'http://127.0.0.1:<port>'
 ### 配合 #11 一起用
 
 | 场景 | 必修 |
+|---|
+
+## 13. edit 工具改大段中文文档再次踩坑 (教训:2026-06-09)
+
+### 情境
+
+**时间**：2026-06-09（写完 agentWorkflowAndTemplates/ 后）  
+**任务**：把 `docs/AGENTS.md` 头部加一段"完整工作流见新目录"  
+**工具**：edit 工具
+
+### 错误链
+
+1. 我用 `edit` 工具改了 `docs/AGENTS.md` 头部 24 行
+2. 改完 `git diff --stat` 显示 **192 行变化 / 107 插入 / 85 删除**（远超预期 24 行）
+3. 检查 diff 发现：全角"？"被改成半角"?"、全角"，"被改成半角","、全角"（"被改成半角"(" 等多处
+4. 这是 **MEMORY.md #19 教训的同款坑**——edit 工具的 oldText/newText 匹配/规范化改了无关的全角标点
+
+### 修法
+
+```bash
+# 1. 还原
+git checkout HEAD -- docs/AGENTS.md
+
+# 2. 改用 Python 直接 write (绕开 edit/write 工具的标点规范化)
+#    见下方"Python 安全模式"
+
+# 3. 验证
+git diff --stat docs/AGENTS.md  # 应该只显示 ~26 行变化
+grep -E "？|，|（|）|：" docs/AGENTS.md  # 全角标点应该都在
+```
+
+最终这次改动是 **26 insertions / 3 deletions**（合理）。
+
+### 加固
+
+| 规则 | 说明 |
 |---|---|
+| ❌ **不**用 edit 工具改大段中文/全角标点文件 | edit 工具的标点规范化会改无关行 |
+| ✅ **用 Python 直接 write** | 绕开所有工具的"自动处理" |
+| ✅ edit 后**必须** `git diff --stat` 看比例 | 改动行数远超预期 → 立刻 `git checkout` |
+| ✅ grep 全角标点确认 | `grep -E "？\|，\|（\|）\|：" <file>` |
+| ❌ **不**在 commit message 里写"教训已查" | 真查过才能写（per MEMORY #14） |
+
+### Python 安全模式（推荐）
+
+```python
+# 写整个文件
+with open('path/to/file.md', 'w', encoding='utf-8') as f:
+    f.write(content)  # content 是 Python 字符串, 标点原样保留
+
+# 在某个 marker 之后追加
+with open('path/to/file.md', 'a', encoding='utf-8') as f:
+    f.write(new_section)
+
+# 改文件某段: 读 → 改字符串 → 写回
+with open('file.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+new_content = content.replace('OLD', 'NEW')  # 用 Python 字符串操作
+with open('file.md', 'w', encoding='utf-8') as f:
+    f.write(new_content)
+```
+
+### 关联
+
+- MEMORY.md #19：edit 工具可能改坏文件标点
+- 这次是 #19 教训的**实战重现**——写大段中文时不能依赖 edit 工具
+- 教训 #11（token 配置失职）的反面：**配置改动前要 diff 验证**——改完任何文件先看 diff 再说"做完了"
+
+
+---
+---|
 | 主人给 PAT token | #11：立刻 `git credential-osxkeychain store` + `git credential-osxkeychain get` 验证 |
 | 主人说开了代理 | #12：立刻 `curl -x` 验证端口 + `git config --global http.*.proxy` 配 + 跑一次 |
 | 主人说 VPN 连上了 | 同样要 `curl --interface` 或直接 `git push` 验 |
