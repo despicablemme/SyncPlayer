@@ -1,0 +1,258 @@
+# 如何控制 Claude Code (Control Claude Code)
+
+> **这是什么？** 在 SyncPlay 项目"如何让 Claude Code 干活"的具体技术细节——派活、抓结果、保证独立上下文、边界情况。
+> **何时查阅？** 主 agent 写完任务书、准备派给 Claude Code 之前**必读**。
+> **最后更新：** 2026-06-09
+
+---
+
+## 🚦 一句话
+
+**Claude Code 是 CLI tool，不是 agent-orchestrable 服务**——它**没有**任务派发 API、进度 webhook、result callback。**主 agent 通过 OpenClaw subagent 跑 `claude -p` 来"编排"它**，实现"独立上下文"的硬约束。
+
+---
+
+## 🎯 三种调用方式对比
+
+| 方式 | 适用场景 | 独立 context | 主人操作 |
+|---|---|---|---|
+| **🅰️ subagent 跑 `claude -p "<prompt>"`** | 大多数任务（推荐） | ✅ 真 fresh | 主人**不**开 terminal |
+| **🅱️ 主人 terminal 跑 `claude` REPL** | 需要多轮交互的复杂任务 | ⚠️ 同一 session 累积 | 主人开 1-2 个 terminal |
+| **🅲️ subagent 跑 `claude` REPL + pty** | 持续监听 Claude Code 状态 | ❌ 难保证 | 主人**不**开 terminal（不推荐） |
+
+**SyncPlay 项目默认用 🅰️。🅱️ 用于 fallback（🅰️ 失败时）。🅲️ 几乎不用。**
+
+---
+
+## 🅰️ subagent 跑 `claude -p` (推荐模式)
+
+### 流程
+
+```
+主 agent (Jarvis) 
+    ↓ sessions_spawn
+subagent-orchestrator
+    ↓ exec: claude -p "<prompt>"
+Claude Code (fresh session)
+    ↓ 跑完一个任务就退出
+subagent-orchestrator 抓 stdout
+    ↓ 提取 BUILDER_DONE / TESTER_DONE
+    ↓ 报告
+主 agent (Jarvis)
+```
+
+### 主 agent 怎么派 Builder subagent
+
+**subagent 任务书模板**（主 agent 给 subagent 派的，不是给 Claude Code 派的）：
+
+```markdown
+## 身份
+你是 Builder orchestrator。Jarvis 派你跑 Claude Code 完成 Builder 任务。
+
+## 任务
+跑 Claude Code 完成以下 Builder 任务，监督输出，提取 commit-sha，回报 Jarvis。
+
+## 步骤
+1. **先验证环境**：
+   - `claude --version` → 应返回 2.1.153+
+   - `echo $ANTHROPIC_API_KEY` | head -c 10 → 应有 "sk-ant-..." 前缀
+     （如果是空，说明 key 没配，停下来报告，不要瞎试）
+   - `git -C ~/CodeProjects/syncplay status` → 应该 clean 或有预期改动
+2. **读任务书**：
+   - `cat ~/CodeProjects/syncplay/tasks/<task-name>-builder.md`
+   - `cat ~/CodeProjects/syncplay/tasks/<task-name>-context.md`
+3. **跑 Claude Code**：
+   - 把任务书 + context 摘要**拼接**成 prompt
+   - `claude -p "<merged prompt>"` （注意转义 + 注意 token 限制）
+   - 如果任务书太长（> 8K tokens），用 `claude -p "$(cat tasks/<task>-builder.md tasks/<task>-context.md)"`
+4. **监督输出**：
+   - 抓 Claude Code 的 stdout
+   - 找 `BUILDER_DONE: <commit-sha>` 标记
+   - 抓最后 50 行（如果失败抓全部 stderr）
+5. **验证 commit**：
+   - `git -C ~/CodeProjects/syncplay log -1 --format="%H %s"` → 确认 commit 存在
+   - `git -C ~/CodeProjects/syncplay show --stat HEAD` → 看改了什么文件
+6. **回报 Jarvis**（必须包含）：
+   - commit-sha
+   - commit message
+   - 改了哪些文件（行数）
+   - unit test 跑通证据
+   - 任何警告 / 异常
+
+## 红线
+- ❌ 不要让 Claude Code 改 docs/CHANGELOG.md / docs/STATUS.md / AGENT_PRACTICES.md
+- ❌ 不要让 Claude Code git push
+- ❌ 不要在 prompt 里贴 ANTHROPIC_API_KEY（subagent 不需要，claude 自己读 env）
+- ❌ 不要重试超过 1 次（失败就报告 Jarvis）
+- ✅ Claude Code 失败 → 抓 stderr 全文 + exit code 报告
+- ✅ 跑完**立刻** push 完工事件回 Jarvis（per MEMORY 铁律 #20）
+```
+
+### 主 agent 怎么派 Tester subagent
+
+跟 Builder subagent 几乎一样，**不同点**：
+1. 任务书是 `tasks/<task-name>-tester.md`（不是 builder）
+2. 跑完让 Claude Code 写报告到 `tasks/<task-name>-test-report.md`（**不** commit）
+3. 抓 `TESTER_DONE: <report path>` 标记
+4. **关键**：subagent 1 必须**先退出**（context 销毁），subagent 2 才能启动
+
+**怎么强制 serial execution**：
+
+```typescript
+// 主 agent (Jarvis) 派活代码示意
+const builderSession = await sessions_spawn({ 
+  task: "...", 
+  taskName: "builder-v0.6-foo", 
+  mode: "run" 
+});
+await sessions_yield();  // 等 builder 完工事件
+
+// 等到 builder 完工事件后, 再派 tester
+const testerSession = await sessions_spawn({ 
+  task: "...", 
+  taskName: "tester-v0.6-foo", 
+  mode: "run" 
+});
+await sessions_yield();  // 等 tester 完工事件
+```
+
+**绝对不能并行**派 Builder 和 Tester——会破坏独立上下文。
+
+---
+
+## 🅱️ 主人 terminal 跑 Claude Code (fallback)
+
+### 什么时候用
+- Builder 任务需要**多轮交互**（"先这样写 → 不行改一下 → 再不行…"）
+- `claude -p` 模式**不支持交互**——单次跑完就退
+- 这种任务需要 Claude Code REPL 持续 session
+
+### 流程（主人操作）
+
+```bash
+# 主人开 terminal 窗口 1
+cd ~/CodeProjects/syncplay
+claude
+# 进去后贴任务书:
+> 读 tasks/<task-name>-builder.md
+> 读 AGENT_PRACTICES.md
+> 读 docs/STATUS.md
+> 任务: {任务内容}
+> ...
+```
+
+### 主人怎么把结果同步给 Jarvis
+
+- 主人 terminal 看到 `BUILDER_DONE: <sha>` 后，**主动**在 webchat 告诉我
+- 或者主人把 commit 链接 / sha 贴到 webchat
+- 我（Jarvis）读到后走 Tester 派活流程
+
+### 这种模式的"独立上下文"问题
+
+- Builder REPL 跑完后，主人**必须**用 `:/exit` 或 Ctrl+C 退出
+- 然后**重新开** `claude`（新 REPL，新 session）
+- 这才能保证 Builder 和 Tester 物理隔离
+- **如果主人忘了退出直接切换**，context 会累积——这不是 fresh
+
+---
+
+## 🛡️ 凭证管理（key 持久化）
+
+### 主人必须**一次性**配 key（per AGENT_PRACTICES #11 教训）
+
+**两种方式**：
+
+#### 方式 A：Claude Pro 订阅（OAuth）
+```bash
+# 主人自己跑 (需要浏览器交互, 我帮不了)
+claude /login
+# → 浏览器打开 https://claude.ai/oauth/...
+# → 主人登录授权
+# → Claude Code 自动把凭证写到 ~/.claude/.credentials.json
+```
+
+**特点**：
+- ✅ 不用管理 API key
+- ✅ 自动续费（订阅制）
+- ❌ 跨机器不通用
+- ❌ 重装 Claude Code 后要重新 /login
+
+#### 方式 B：Anthropic API key（推荐）
+```bash
+# 主人把 key 给我, 我立刻持久化到 ~/.zshrc (per #11 教训)
+# 我会跑:
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc
+source ~/.zshrc
+
+# 验证:
+echo $ANTHROPIC_API_KEY | head -c 10
+# 应输出: sk-ant-...
+```
+
+**特点**：
+- ✅ 跨机器通用
+- ✅ 重装系统后只要 zshrc 还在就能用
+- ❌ 按 token 用量计费
+- ❌ key 泄露要立刻去 https://console.anthropic.com 撤销
+
+### 主 agent 怎么验证 key 已配
+
+每次派 Claude Code subagent 前，subagent 会跑：
+```bash
+claude --version  # 验证安装
+echo "${ANTHROPIC_API_KEY:0:10}"  # 验证 env (只打前缀, 不打全文)
+```
+
+如果 key 不存在或无效，subagent **立刻** 报告失败（per #11 教训——"凭证已就位"必须用工具验证，不能凭印象）。
+
+---
+
+## ⚠️ 边界（什么情况下不推荐用 Claude Code）
+
+| 场景 | 推荐替代 |
+|---|---|
+| 任务需要**实时**多轮交互 | 主人 terminal 跑 Claude Code |
+| 任务超长（prompt > 8K tokens） | 拆成多个小任务 / 写到 tasks/ 让 Claude Code 读文件 |
+| 任务涉及**网络/网络敏感操作** | 主人手动操作（per AGENT_PRACTICES #12 教训——代理可能不工作） |
+| 任务涉及**金钱交易** | ❌ 绝不（per USER.md 重要规则） |
+| 任务需要 **GUI 交互** | 主人手动（Claude Code 是 CLI） |
+| 任务需要**安装系统软件** | 主人手动 + 主人确认（per MEMORY #2 教训） |
+
+---
+
+## 🐛 常见错误
+
+### 错误 1：subagent 跑完 `claude -p` 没抓 commit-sha
+**症状**：subagent 报告"Claude Code 跑完了"，但没 commit-sha  
+**修复**：subagent 任务书里**必须**明确"抓 `BUILDER_DONE: <sha>` 标记"——不要让 subagent 自己去 git log 找
+
+### 错误 2：Builder 和 Tester 并行派
+**症状**：两个 subagent 同时跑，context 串了  
+**修复**：主 agent 用 `sessions_yield` 串行等完工事件，**绝不**并行
+
+### 错误 3：subagent 任务书里贴了 ANTHROPIC_API_KEY
+**症状**：key 泄露到 subagent transcript  
+**修复**：subagent 不需要 key，claude 自己读 env，subagent 任务书里**只**说"验证 env 存在"（不读全文）
+
+### 错误 4：Claude Code 改 docs/ 文档
+**症状**：CHANGELOG.md / STATUS.md 被 Builder 改坏  
+**修复**：Builder 任务书**明确**列"不要改 X / Y / Z"——见 `templates/builder-task.md`
+
+### 错误 5：测试报告没 commit
+**症状**：Tester 写了报告到 `tasks/<task>-test-report.md`，但 subagent 抓不到 `TESTER_DONE` 标记  
+**修复**：Tester 任务书**明确**说"用 `git add tasks/<task>-test-report.md && git commit` 然后输出 `TESTER_DONE: <path>`"——但**不** push
+
+---
+
+## 📚 关联文档
+
+- `workflow.md` — 整体流程
+- `roles.md` — 三角色定义
+- `acceptance.md` — 验收
+- `templates/builder-task.md` / `templates/tester-task.md` — 任务书模板（含 OpenClaw 注入示例）
+- `~/CodeProjects/syncplay/AGENT_PRACTICES.md` — #11 (token 配置) / #12 (代理配置) 必读
+
+---
+
+*制定：Jarvis & 主人*
+*最后更新：2026-06-09*

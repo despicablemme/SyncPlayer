@@ -1,11 +1,34 @@
 # SyncPlay Agent 角色分工
 
-> **这是什么？** 项目多 Agent 开发的核心规范——每个角色的职责、工作流程、交付物。
-> **何时查阅？** 每次开始新任务时**必须先看这个**，严格执行三角色分工。
+> **这是什么？** 项目"人类可读"的角色分工入口——给新加入的开发者 / 接手项目的人看的。
+> **何时查阅？** 第一次接触 SyncPlay 项目 / 想了解项目级设计原则时**先看这个**。
 > **适用范围：** SyncPlay 项目所有开发任务（v0.x 迭代、v1.0、v2.0 等）
-> **最后更新：** 2026-06-08
+> **最后更新：** 2026-06-09
 
 ---
+
+## ⚠️ Agent 必读：完整工作流 + Claude Code 协作 + 模板已迁移
+
+**所有 agent（OpenClaw 主 agent / subagent / Claude Code 实例）干活时，请看新目录**：
+
+📁 **`agentWorkflowAndTemplates/`** —— agent 唯一权威工作流来源
+
+包含：
+- `workflow.md` — 通用工作流（OpenClaw + Claude Code 协作）
+- `roles.md` — 三角色详细定义 + Claude Code 实例对应关系
+- `control-claude.md` — 如何控制 Claude Code（派活 / 抓结果 / 独立上下文）
+- `acceptance.md` — Reviewer 验收清单
+- `reporting.md` — 汇报机制
+- `templates/` — 给 Claude Code 用的所有任务书 + 报告 + commit 模板
+
+**本文档（`docs/AGENTS.md`）是项目级入口**——保留 v0.4 立的"三角色铁律"作为设计原则参考。**实际工作流以新目录为准**。
+
+---
+
+## 🏛️ 项目级规范（v0.4 立，保留作为设计原则）
+
+> 这一节是 v0.4 立的"三角色分工"原始规范——**原则**仍然适用，但**具体实现**（OpenClaw subagent 怎么派、Claude Code 怎么调、模板怎么用）请看 `agentWorkflowAndTemplates/`。
+
 
 ## ⚠️ 铁律
 
