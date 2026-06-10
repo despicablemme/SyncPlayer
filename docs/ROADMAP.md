@@ -3,16 +3,79 @@
 > **这是什么?** 项目的"目标与决策中心"--要往哪走、为什么这么做、备选方案是什么。
 > **何时查阅?** 想看方向、决策讨论、备选方案对比时。
 > **关联文档:** [STATUS.md](./STATUS.md) · [REQUIREMENTS.md](./REQUIREMENTS.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [README.md](./README.md) · [CHANGELOG.md](./CHANGELOG.md)
-> **最后更新:** 2026-06-08
+> **最后更新:** 2026-06-10
 
 ---
 
 ## 🚦 当前迭代
 
-**目标版本**：v0.7 - TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
-**当前阶段**：**v0.6.0 已发布** (2026-06-09 Shipped)
+**目标版本**：v0.6.1 — 视频添加历史记录 (FR-4)  (主 agent 拍 2026-06-10)
+**当前阶段**：**v0.6.0 已发布** (2026-06-09 Shipped) → **v0.6.1 计划阶段 A 完成** (2026-06-10, plan 文档已落地)
 **上一里程碑**：v0.6.0 体验优化 + bug 修复 (FR-1/2/3 全部 PASS, 2026-06-09 Shipped)
-**下一里程碑**：v0.7 计划制定 (待主人拍方向)
+**下一里程碑**：v0.7 - TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
+
+---
+
+---
+
+## 🎯 v0.6.1 — 视频添加历史记录 (FR-4) (计划中, 2026-06-10 立项)
+
+**目标**：用户选完本地/在线视频后, 记录被持久化, 下次打开应用能一键从历史里重新选择对应视频, 不用重新粘贴 URL 或重新找文件。
+
+### 用户故事
+- **故事 A**（本地视频）：主人周一选了 `/Movies/inception.mp4`，周三想跟朋友再看一次 → 打开 SyncPlay → 点"历史" → 看到 "inception.mp4 · 3天前" → 一键加载（不需重新翻文件夹）
+- **故事 B**（在线 URL）：主人分享了一个 B站 URL 加载看片 → 第二天想再开 → 点"历史" → 看到"B站某视频 · 昨天" → 一键加载
+
+### 核心需求 (FR-4)
+- [ ] **持久化**：用 `electron-store` 存到 `app.getPath('userData') + '/video-history.json'`
+- [ ] **记录时机**：用户成功加载视频后（`video.loadedmetadata` 事件）自动写入
+- [ ] **记录字段**：
+  - 本地视频：`{ type: 'local', path, name, size, mtime, addedAt }`
+  - 在线 URL：`{ type: 'url', url, title, addedAt }`
+- [ ] **历史列表 UI**：在视频选择对话框附近加"📜 历史"下拉/按钮, 展开显示最近 20 条
+- [ ] **一键重新选择**：
+  - 本地：`loadVideo('file://' + path, name)` — 浏览器/Electron 直接用绝对路径
+  - URL：`loadVideo(url, title)` — 跟用户粘贴 URL 走同一路径
+- [ ] **失效检测**：本地文件 `fs.existsSync(path)` 检查 + URL `video.error` 监听
+- [ ] **失效标记**：UI 显示"⚠️ 文件已移动/删除"灰色
+- [ ] **删除/清空**：单条删除 + "清空所有"按钮（带确认）
+
+### MVP 范围（避免过度设计）
+- ✅ 最近 20 条
+- ✅ 按 `addedAt` 倒序
+- ✅ 失效标灰（不自动删, 用户手动决定）
+- ✅ 单条删除 + 清空
+
+### 不做（v0.7.x 再加）
+- ❌ 标签/分类
+- ❌ 搜索/筛选
+- ❌ 排序选项（固定按时间倒序）
+- ❌ 多端同步/上传到云
+- ❌ 视频缩略图缓存
+
+### 技术关键点
+- **持久化**：`electron-store` (主进程同步 API, JSON 文件)
+- **本地文件路径拿取**：Electron 30+ 推荐 `webUtils.getPathForFile(file)` (从 preload 暴露)
+- **失效检查**：本地用 `fs.existsSync` 主进程 IPC, URL 复用现有 `video.error` 流程
+- **IPC 接口**：`desktopAPI.videoHistory.{get/add/remove/clear/checkExists}`
+
+### 任务拆分 (阶段 B 待主 agent 拍, 3 子任务)
+- **v0.6.1-A** 主进程 + preload 基础设施: electron-store 装 + main.js IPC handler + preload.js 暴露 videoHistory API
+- **v0.6.1-B** 客户端 UI + 集成: 视频选择对话框加"历史"按钮 + 自动写记录 + 失效标灰 + 单条/清空
+- **v0.6.1-C** 测试 + 验收: unit test + Playwright e2e (跑真实 desktop app)
+
+### 决策日志 (Jarvis 选)
+- **持久化选 electron-store 不选 SQLite**: 数据量小（最多几十条），全量加载无性能问题，JSON 容易 debug
+- **选 webUtils.getPathForFile 不选 file.path**: Electron 30+ 推荐 API, file.path 在 webUtils 启用后被弃用
+- **选 IPC 同步 API 不走 async/await**: 历史读是高频操作, 同步 API 简单可靠
+- **不做云同步**: 隐私, 本地优先, 以后再说
+
+### DoD
+- [ ] 3 子任务全部 PASS
+- [ ] unit test 90+ pass (v0.6.0 是 88, 加 ~5-10 个新测试)
+- [ ] Playwright e2e: 启动 desktop app → 加本地视频 → 退出 → 重启 → 历史可见 → 一键加载
+- [ ] GitHub Actions 三平台 build 通过 (Windows .exe / Mac .dmg / Linux AppImage)
+- [ ] Mac dmg 实测装上能开 (per AGENT_PRACTICES #22)
 
 ---
 

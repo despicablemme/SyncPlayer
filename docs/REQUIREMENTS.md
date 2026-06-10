@@ -3,7 +3,7 @@
 > **这是什么？** 系统要满足什么要求——v1.0 硬性要求 + 功能范围 + 排除项。  
 > **何时查阅？** 想看需求、验收标准、不能做什么时。  
 > **关联文档：** [ROADMAP.md](./ROADMAP.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [STATUS.md](./STATUS.md) · [README.md](./README.md) · [CHANGELOG.md](./CHANGELOG.md)  
-> **最后更新：** 2026-06-07
+> **最后更新：** 2026-06-10
 
 ---
 
@@ -294,6 +294,77 @@ FR-1 + FR-3 都需要改房间状态机. 建议**一次性重构**成:
 ```
 
 主 agent 建议: 阶段 B 拆任务时, FR-1 + FR-3 状态机部分**合并**成一个子任务, 避免重复改状态机.
+
+---
+
+## 九、v0.6.1 新增需求 (2026-06-10 立项)
+
+### FR-4: 视频添加历史记录
+
+**目标**：用户成功加载视频后, 记录被持久化, 下次能一键重新加载, 不用重新选文件或粘贴 URL。
+
+**用户场景**：
+
+- **场景 A**（本地视频）：主人周一选了 `/Movies/inception.mp4` 看片, 周三想跟朋友再看一次 → 打开 SyncPlay → 点"📜 历史" → 看到 "inception.mp4 · 3天前" → 一键加载
+- **场景 B**（在线 URL）：主人分享了一个视频 URL 加载看片, 第二天想再开 → 点"📜 历史" → 看到对应 URL → 一键加载
+
+**功能要求**：
+
+| 需求 | 说明 | 验收 |
+|---|---|---|
+| 持久化 | electron-store 存 `app.getPath('userData')/video-history.json` | 重启 app 数据还在 |
+| 自动记录 | 视频 `loadedmetadata` 事件触发写入 | 每次成功加载都加一条 |
+| 记录字段 | 本地: path/name/size/mtime/addedAt; URL: url/title/addedAt | 字段全 |
+| 历史列表 UI | 视频选择对话框加"📜 历史"按钮, 展开下拉/侧边栏 | 列表显示最近 20 条 |
+| 一键重选 | 本地直接 `file://` + loadVideo; URL 直接 loadVideo | 1 click 完成 |
+| 失效检测 | 本地用 `fs.existsSync`; URL 走 `video.error` | 失效有提示 |
+| 失效标记 | 列表项标灰 + "⚠️ 文件已移动" | UI 清晰 |
+| 删除/清空 | 单条删除 + "清空所有" (带确认) | 操作可逆 (有确认) |
+
+**反需求（不做）**：
+
+- ❌ 云同步/多端共享
+- ❌ 标签/搜索/排序（v0.7.x 再加）
+- ❌ 视频缩略图缓存
+- ❌ 上传视频到 server（架构不允许）
+
+**数据 schema**：
+
+```json
+{
+  "videoHistory": [
+    {
+      "type": "local",
+      "path": "/Users/bruce/Movies/inception.mp4",
+      "name": "inception.mp4",
+      "size": 2147483648,
+      "mtime": 1717987200000,
+      "addedAt": 1718064000000
+    },
+    {
+      "type": "url",
+      "url": "https://example.com/video.mp4",
+      "title": "示例视频",
+      "addedAt": 1718064000000
+    }
+  ]
+}
+```
+
+**IPC 接口 (主进程 ↔ renderer)**：
+
+```js
+// preload.js 暴露
+contextBridge.exposeInMainWorld('desktopAPI', {
+  videoHistory: {
+    get: () => VideoHistory[],                    // 拉全部
+    add: (item) => VideoHistory[],                // 加一条 (去重 + 排序)
+    remove: (addedAt) => VideoHistory[],          // 删一条 (按 addedAt 唯一标识)
+    clear: () => void,                            // 清空
+    checkExists: (path) => boolean                // 本地文件还在不在
+  }
+});
+```
 
 ---
 

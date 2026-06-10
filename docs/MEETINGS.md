@@ -3,9 +3,65 @@
 > **这是什么？** 项目会议讨论记录——决策、计划、回顾等。  
 > **何时查阅？** 想看"为什么这么做" / "哪个版本改了什么" / "下次要做什么"。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [REQUIREMENTS.md](./REQUIREMENTS.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-09
+> **最后更新：** 2026-06-10
 >
 > ⚠️ **排序规则: 按发生时间倒序 (最新在前)** — 每次加新会议必须放最前面, 永远不要追加到末尾。
+
+---
+
+## 会议 #007 — 2026-06-10 v0.6.1 目标确认 (计划阶段 A)
+
+**参会人员**：主人 (Bruce)、Jarvis (主控)
+**主题**：v0.6.1 视频添加历史记录 — 目标确认 + 持久化方案决策
+**耗时**：~10 分钟
+**阶段**：v0.6.1 阶段 A (计划/讨论)
+
+### 一、目标（主人拍）
+
+v0.6.1 添加 **"视频添加历史记录"** 功能：
+
+- 用户选完本地/在线视频后，记录被持久化
+- 下次打开应用能一键从历史里**重新选择**对应视频
+- 不用重新粘贴 URL 或重新选文件
+
+### 二、主人纠正（3 个）
+
+1. **版本号**：主人原话".06.1" → 实际 **v0.6.1**（我之前误听成 v0.7.1，主 agent 复述阶段已确认）
+2. **平台性质**：我们是 **desktop app (Electron 33)** → **不**是纯 web 端，浏览器 File API 限制不适用
+3. **持久化方式**：主人授权 Jarvis 自选最合适方案
+
+### 三、关键技术决策（Jarvis 选）
+
+| 决策 | 选择 | 理由 |
+|---|---|---|
+| **持久化库** | `electron-store` | Electron 官方推荐，JSON 存 userData，主进程同步 API，轻量 (<5KB) |
+| **本地视频"下次用"** | `webUtils.getPathForFile(file)` 拿绝对路径 + `loadVideo('file://'+path)` | Electron 30+ 推荐 API，拿到路径下次直接用 |
+| **URL 视频"下次用"** | 存 URL + 提取 title，下次直接 `loadVideo(url)` | 简单可靠 |
+| **MVP 范围** | 最近 20 条 + 失效标灰 + 单条删除/清空 | 不过度设计，标签/搜索 v0.7.x 再加 |
+| **数据存哪** | `app.getPath('userData') + '/video-history.json'` | electron-store 默认位置，跨平台 |
+| **IPC 接口** | `desktopAPI.videoHistory.{get/add/remove/clear/checkExists}` | 跟现有 desktopAPI 命名一致 |
+
+### 四、不做什么（反模式避）
+
+- ❌ **不**用 IndexedDB（electron-store 更合适，主进程能直接读）
+- ❌ **不**用 SQLite（数据量小，过度设计）
+- ❌ **不**做"标签/搜索/排序"（MVP 不做）
+- ❌ **不**同步到云端（隐私，本地数据）
+- ❌ **不**让用户上传视频到 server（架构不允许，v1.0 也不做）
+
+### 五、阶段 B 子任务拆分（待主 agent 拍）
+
+预计 3 个子任务：
+
+- **v0.6.1-A** 主进程 + preload 基础设施：electron-store 装 + main.js IPC handler + preload.js 暴露 videoHistory API
+- **v0.6.1-B** 客户端 UI + 集成：视频选择对话框加"📜 历史"按钮 + 自动写记录 + 失效标灰 + 单条/清空
+- **v0.6.1-C** 测试 + 验收：unit test + e2e test（用 Playwright 跑真实 desktop app）
+
+阶段 C 完工一次性更新 STATUS/CHANGELOG/MEETINGS。
+
+### 六、下一步
+
+主 agent 跑完阶段 A 4-6 → commit "plan(v0.6.1): 视频历史记录 计划 + 会议纪要" + push → 主人 review 完 plan 文档 → 阶段 B 拆任务派 subagent。
 
 ---
 
