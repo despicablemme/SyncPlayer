@@ -747,8 +747,19 @@
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
         const list = document.getElementById('videoHistoryList');
+        const footer = document.getElementById('videoHistoryFooter');
         if (!list) return;
-        list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        const show = list.style.display === 'none';
+        list.style.display = show ? 'block' : 'none';
+        if (footer) footer.style.display = show ? 'block' : 'none';
+      });
+    }
+
+    // v0.6.1-B-fix: 清空所有按钮 → 复用 videoHistory.clear() (含 confirm 弹框)
+    const clearAllBtn = document.getElementById('videoHistoryClearAllBtn');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', () => {
+        videoHistory.clear();
       });
     }
 
