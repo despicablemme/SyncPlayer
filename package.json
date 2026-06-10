@@ -9,6 +9,7 @@
   "scripts": {
     "test": "node --test test/unit/*.test.js",
     "test:e2e": "node test/e2e/test.js",
+    "test:e2e:history": "node test/e2e/video-history.js",
     "test:ice": "node test/network/ice-smoke.js",
     "test:room": "node test/network/regression-create-room.js"
   },
