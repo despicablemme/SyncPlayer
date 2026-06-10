@@ -60,6 +60,7 @@
     }
   },
   "dependencies": {
+    "electron-store": "^8.2.0",
     "peer": "^0.6.1"
   }
 }

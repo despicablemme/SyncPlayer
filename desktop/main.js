@@ -8,13 +8,22 @@
  * 4. On quit, kill the child server process
  */
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, webUtils } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const Store = require('electron-store');
 
 // ─── Globals ────────────────────────────────────────────────────────────────
 let serverProcess = null;
 let mainWindow = null;
+
+// ─── Video History Store (v0.6.1 FR-4) ─────────────────────────────────────
+const videoHistoryStore = new Store({
+  name: 'video-history',
+  defaults: { items: [] },
+});
+const MAX_HISTORY = 20;
 
 // ─── Path Resolution ─────────────────────────────────────────────────────────
 // app.getAppPath() returns:
@@ -143,6 +152,56 @@ function waitForServer(port = 9000, timeout = 15000) {
 }
 
 app.whenReady().then(async () => {
+  // ─── Video History IPC Handlers (v0.6.1 FR-4) ────────────────────────────
+  ipcMain.handle('video-history:get', () => {
+    return videoHistoryStore.get('items', []);
+  });
+
+  ipcMain.handle('video-history:add', (event, item) => {
+    if (!item || !item.type) {
+      throw new Error('video-history:add: item.type is required');
+    }
+    if (item.type !== 'local' && item.type !== 'url') {
+      throw new Error(`video-history:add: unknown type ${item.type}`);
+    }
+    const items = videoHistoryStore.get('items', []);
+    const dedupeKey = item.type === 'local' ? `local:${item.path}` : `url:${item.url}`;
+    const filtered = items.filter(existing => {
+      const existingKey = existing.type === 'local' ? `local:${existing.path}` : `url:${existing.url}`;
+      return existingKey !== dedupeKey;
+    });
+    filtered.unshift(item);
+    const truncated = filtered.slice(0, MAX_HISTORY);
+    videoHistoryStore.set('items', truncated);
+    return truncated;
+  });
+
+  ipcMain.handle('video-history:remove', (event, addedAt) => {
+    if (typeof addedAt !== 'number') {
+      throw new Error('video-history:remove: addedAt must be a number');
+    }
+    const items = videoHistoryStore.get('items', []);
+    const filtered = items.filter(item => item.addedAt !== addedAt);
+    videoHistoryStore.set('items', filtered);
+    return filtered;
+  });
+
+  ipcMain.handle('video-history:clear', () => {
+    videoHistoryStore.set('items', []);
+    return [];
+  });
+
+  ipcMain.handle('video-history:check-exists', (event, filePath) => {
+    if (typeof filePath !== 'string') {
+      return false;
+    }
+    try {
+      return fs.existsSync(filePath);
+    } catch (e) {
+      return false;
+    }
+  });
+
   startServer();
   await waitForServer();
   createWindow();
