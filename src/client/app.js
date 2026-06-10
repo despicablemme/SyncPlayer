@@ -89,6 +89,142 @@
     }
   }
 
+  /** v0.6.1 FR-4: HTML 转义,防 XSS */
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  }
+
+  /** v0.6.1 FR-4: 友好时间显示 */
+  function formatTime(ts) {
+    const d = new Date(ts);
+    const now = Date.now();
+    const diff = (now - ts) / 1000;
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return `${Math.floor(diff/60)} 分钟前`;
+    if (diff < 86400) return `${Math.floor(diff/3600)} 小时前`;
+    if (diff < 86400*7) return `${Math.floor(diff/86400)} 天前`;
+    return d.toLocaleDateString('zh-CN');
+  }
+
+  // ============ v0.6.1 FR-4: 视频历史记录 ============
+  // 守卫: web 浏览器 (无 electron) 时静默跳过所有调用
+  const videoHistory = {
+    list: [],
+
+    async refresh() {
+      if (!window.desktopAPI?.videoHistory) return;
+      this.list = await window.desktopAPI.videoHistory.get();
+      this.render();
+    },
+
+    async addLocal(file) {
+      if (!window.desktopAPI?.videoHistory) return;
+      const path = window.desktopAPI.getPathForFile(file);
+      if (!path) return; // Electron < 30 不支持, 跳过
+      await window.desktopAPI.videoHistory.add({
+        type: 'local',
+        path: path,
+        name: file.name,
+        size: file.size,
+        mtime: file.lastModified,
+        addedAt: Date.now(),
+      });
+      await this.refresh();
+    },
+
+    async addUrl(url) {
+      if (!window.desktopAPI?.videoHistory) return;
+      const title = (url.split('/').pop() || '').split('?')[0] || url;
+      await window.desktopAPI.videoHistory.add({
+        type: 'url',
+        url: url,
+        title: title,
+        addedAt: Date.now(),
+      });
+      await this.refresh();
+    },
+
+    async remove(addedAt) {
+      if (!window.desktopAPI?.videoHistory) return;
+      await window.desktopAPI.videoHistory.remove(addedAt);
+      await this.refresh();
+    },
+
+    async clear() {
+      if (!confirm('确定清空所有视频历史? 此操作不可恢复。')) return;
+      if (!window.desktopAPI?.videoHistory) return;
+      await window.desktopAPI.videoHistory.clear();
+      await this.refresh();
+    },
+
+    async checkExists(path) {
+      if (!window.desktopAPI?.videoHistory) return false;
+      return await window.desktopAPI.videoHistory.checkExists(path);
+    },
+
+    render() {
+      const countEl = document.getElementById('videoHistoryCount');
+      const listEl = document.getElementById('videoHistoryList');
+      if (!countEl || !listEl) return;
+
+      countEl.textContent = this.list.length;
+
+      if (this.list.length === 0) {
+        listEl.innerHTML = '<div class="video-history-empty">暂无历史</div>';
+        return;
+      }
+
+      // 渲染列表
+      listEl.innerHTML = this.list.map(item => {
+        if (item.type === 'local') {
+          return `
+            <div class="video-history-item" data-added-at="${item.addedAt}">
+              <div class="video-history-icon">📁</div>
+              <div class="video-history-info">
+                <div class="video-history-name">${escapeHtml(item.name)}</div>
+                <div class="video-history-path">${escapeHtml(item.path)}</div>
+                <div class="video-history-time">${formatTime(item.addedAt)}</div>
+              </div>
+              <button class="video-history-remove" data-action="remove" title="删除">×</button>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="video-history-item" data-added-at="${item.addedAt}">
+              <div class="video-history-icon">🌐</div>
+              <div class="video-history-info">
+                <div class="video-history-name">${escapeHtml(item.title)}</div>
+                <div class="video-history-path">${escapeHtml(item.url)}</div>
+                <div class="video-history-time">${formatTime(item.addedAt)}</div>
+              </div>
+              <button class="video-history-remove" data-action="remove" title="删除">×</button>
+            </div>
+          `;
+        }
+      }).join('');
+
+      // 启动时检测本地文件失效
+      this.markMissing();
+    },
+
+    async markMissing() {
+      // 遍历本地项, 调 checkExists, 失效标灰
+      const items = document.querySelectorAll('.video-history-item');
+      for (const item of items) {
+        const addedAt = parseInt(item.dataset.addedAt);
+        const data = this.list.find(x => x.addedAt === addedAt);
+        if (!data || data.type !== 'local') continue;
+        const exists = await this.checkExists(data.path);
+        if (!exists) {
+          item.classList.add('video-history-missing');
+          item.title = '⚠️ 文件已移动或删除';
+          item.style.pointerEvents = 'none';
+          item.style.opacity = '0.5';
+        }
+      }
+    },
+  };
+
   // ============ 连接管理(带自动重连) ============
 
   class ConnectionManager {
@@ -475,11 +611,12 @@
     noVideo.style.display = 'none';
   }
 
-  videoInput.addEventListener('change', (e) => {
+  videoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
       loadVideo(url, '本地: ' + file.name);
+      await videoHistory.addLocal(file); // v0.6.1 FR-4: 自动写历史
     }
   });
 
@@ -496,11 +633,14 @@
     if (e.key === 'Enter') loadUrlBtn.click();
   });
 
-  video.addEventListener('loadedmetadata', () => {
+  video.addEventListener('loadedmetadata', async () => {
     if (fileName.textContent.startsWith('加载中')) {
       // 去掉 query string, 兜底"视频" 避免空名
       const rawName = (videoUrlInput.value || '').split('/').pop().split('?')[0];
       fileName.textContent = '已加载: ' + (rawName || '视频');
+      // v0.6.1 FR-4: URL 加载成功 → 自动写历史
+      const url = videoUrlInput.value.trim();
+      if (url) await videoHistory.addUrl(url);
     }
     // FR-3: 视频元数据就绪 → 写进 myVideoInfo, 触发状态重算
     const info = describeVideo(video, fileName.textContent);
@@ -597,4 +737,53 @@
     peerVideoInfo: () => peerVideoInfo,
     STATE_DISPLAY: STATE_DISPLAY,
   };
+
+  // ============ v0.6.1 FR-4: 历史按钮 + 列表事件 ============
+  function setupHistoryUI() {
+    videoHistory.refresh();
+
+    // 历史按钮 toggle
+    const toggleBtn = document.getElementById('videoHistoryToggleBtn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        const list = document.getElementById('videoHistoryList');
+        if (!list) return;
+        list.style.display = list.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
+    // 历史列表点击 (重新加载 / 单条删除)
+    const listEl = document.getElementById('videoHistoryList');
+    if (listEl) {
+      listEl.addEventListener('click', async (e) => {
+        const removeBtn = e.target.closest('[data-action="remove"]');
+        if (removeBtn) {
+          e.stopPropagation();
+          const item = removeBtn.closest('.video-history-item');
+          if (!item) return;
+          const addedAt = parseInt(item.dataset.addedAt);
+          await videoHistory.remove(addedAt);
+          return;
+        }
+        // 点击 item 本身 → 重新加载
+        const item = e.target.closest('.video-history-item');
+        if (!item || item.classList.contains('video-history-missing')) return;
+        const addedAt = parseInt(item.dataset.addedAt);
+        const data = videoHistory.list.find(x => x.addedAt === addedAt);
+        if (!data) return;
+        if (data.type === 'local') {
+          loadVideo('file://' + data.path, '本地: ' + data.name);
+        } else {
+          loadVideo(data.url, '已加载: ' + data.title);
+        }
+      });
+    }
+  }
+
+  // script 在 body 末尾, DOMContentLoaded 还没触发; 跑 readyState 兜底
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupHistoryUI);
+  } else {
+    setupHistoryUI();
+  }
 })();

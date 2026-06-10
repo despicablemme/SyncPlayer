@@ -23,6 +23,15 @@
       <button id="loadUrlBtn" class="btn btn-secondary">加载URL</button>
       <label id="fileName" style="color: #888; font-size: 13px;"></label>
     </div>
+    <!-- v0.6.1 FR-4: 视频添加历史记录 -->
+    <div class="video-history-section">
+      <button id="videoHistoryToggleBtn" class="btn btn-secondary" type="button">
+        📜 历史 (<span id="videoHistoryCount">0</span>)
+      </button>
+      <div id="videoHistoryList" class="video-history-list" style="display: none;">
+        <!-- 动态填充 -->
+      </div>
+    </div>
   </div>
 
   <div class="video-container">
