@@ -678,6 +678,7 @@
     connMgr = null;
     // FR-3: 清空对端 video_info, 切回 no_room, 触发 listener 重置 UI + 停 engine
     peerVideoInfo = null;
+    myVideoInfo = null;   // v0.6.2 fix: 退出时清空, 避免陈旧状态干扰重入
     roomState.setState(ROOM_STATES.NO_ROOM);
     enableRoomButtons();
     roomInfo.style.display = 'none';

@@ -33,7 +33,7 @@
   //   - video 子状态间转移: loaded/peer_loaded/match 三维
   const TRANSITIONS = Object.freeze({
     no_room:                       ['connecting'],
-    connecting:                    ['in_room_no_video', 'no_room'],
+    connecting:                    ['in_room_no_video', 'in_room_waiting_peer_video', 'in_room_synced', 'in_room_mismatch', 'no_room'],
     in_room_no_video:              ['in_room_waiting_peer_video', 'in_room_synced', 'in_room_mismatch', 'connecting', 'no_room'],
     in_room_waiting_peer_video:    ['in_room_synced', 'in_room_mismatch', 'in_room_no_video', 'connecting', 'no_room'],
     in_room_synced:                ['in_room_mismatch', 'in_room_waiting_peer_video', 'in_room_no_video', 'connecting', 'no_room'],

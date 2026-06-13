@@ -134,11 +134,19 @@ describe('RoomStateMachine - 非法转移', () => {
     assert.strictEqual(sm.state, STATES.NO_ROOM);
   });
 
-  test('connecting 不能直接跳到 in_room_synced (必须先经过 in_room_no_video)', () => {
-    const sm = new RoomStateMachine();
-    sm.setState(STATES.CONNECTING);
-    assert.strictEqual(sm.setState(STATES.IN_ROOM_SYNCED), false);
-    assert.strictEqual(sm.state, STATES.CONNECTING);
+  test('connecting 可以直接跳到任意 in_room_* (FR-3 解耦, 视频与房间独立)', () => {
+    const targets = [
+      STATES.IN_ROOM_NO_VIDEO,
+      STATES.IN_ROOM_WAITING_PEER_VIDEO,
+      STATES.IN_ROOM_SYNCED,
+      STATES.IN_ROOM_MISMATCH,
+    ];
+    for (const target of targets) {
+      const sm = new RoomStateMachine();
+      sm.setState(STATES.CONNECTING);
+      assert.strictEqual(sm.setState(target), true, `connecting → ${target} 应该允许`);
+      assert.strictEqual(sm.state, target);
+    }
   });
 
   test('相同状态转移返回 false', () => {
