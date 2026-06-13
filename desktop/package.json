@@ -1,6 +1,6 @@
 {
   "name": "syncplay-desktop",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "SyncPlay Desktop App - 异地同步看片神器 (独立打包)",
   "main": "main.js",
   "scripts": {

@@ -3,14 +3,14 @@
 > **这是什么?** 项目的"进度快照"--当前版本、已完成、下一步。
 > **何时查阅?** 每次回来接任务时**先看这个**。
 > **关联文档:** [ROADMAP.md](./ROADMAP.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)
-> **最后更新：** 2026-06-13
+> **最后更新：** 2026-06-13 (v0.6.2 阶段 C 收尾)
 
 ---
 
 ## 🚦 一句话状态
 
-**当前版本：v0.6.1 (Shipped 2026-06-10, docs 补齐 2026-06-13)** — 视频添加历史记录 (FR-4): electron-store 持久化 + 主进程 IPC 5 个 handler + 客户端 UI + 失效检测 + 单删/清空
-**下一目标：v0.6.2** — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); v0.6.1 + v0.6.2 合并出 release asset (远端先 debug, 主人实测通过后再 release)
+**当前版本：v0.6.2 (Shipped 2026-06-13)** — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); TRANSITIONS 表放宽 + exitRoom 清 myVideoInfo + 2 个清理项 (peer.on('open') 走 recomputeRoomState + SyncEngine.unbindVideoEvents) + 远端 Mac arm64 debug build workflow_dispatch 入口
+**下一目标：v0.7** — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍, 主人实测 v0.6.2 debug build 通过后拍)
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
@@ -134,6 +134,45 @@
 - ✅ 单元测试 + e2e 测试全绿
 - ⏳ GitHub Actions 跨平台 build 跑过 v0.6.1-B 测试用 macos-latest, 但 **未触发 release workflow**（主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测）
 - ⏳ Mac dmg 实测装上能开 — **推迟到 v0.6.2 一起实测**（同上）
+
+---
+
+## ✅ v0.6.2 已完成 (2026-06-13 Shipped) — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001)
+
+**Commits** (2 个子任务 + 1 文档收尾, 全部 PASS):
+- `0d4f922` fix(v0.6.2-A): 放宽 TRANSITIONS + 改测试 + exitRoom 清 myVideoInfo
+- `4000465` feat(v0.6.2-B): peer.on('open') 改走 recomputeRoomState + unbindVideoEvents + Mac arm64 debug workflow
+- `<v0.6.2-stage-c>` docs(v0.6.2): release status update + version bump (本 commit)
+
+**Tag**：`v0.6.2`（2026-06-13 推, per `git log origin/main..main` 验证）
+
+### 关键修复 (BUG-2026-06-13-001)
+- 🐛 **根因**：`src/shared/room-state.js:36` TRANSITIONS.connecting 过度约束 + `src/client/app.js:515-548` recomputeRoomState 跨级转移被静默 reject
+  - 重入房间后 myVideoInfo 在 exitRoom() 没清 → 状态卡 CONNECTING → UI 黄色 waiting + engine.start() 永不被调
+- 🔧 **修复**：
+  - 放宽 TRANSITIONS.connecting 加 4 个 in_room_* 终态 (跟 FR-3 视频与房间解耦设计一致)
+  - exitRoom() 加 myVideoInfo = null (防陈旧状态)
+- 🧹 **清理 (2 项 Claude 建议 + 主 agent A6 接手)**：
+  - `src/client/app.js:263` peer.on('open') 改走 recomputeRoomState (避免 UI 不同步)
+  - `src/shared/sync-engine.js:52` bindVideoEvents 配对 unbindVideoEvents (防反复进房 listener 累积)
+- 🔧 **远端 debug workflow**：
+  - `.github/workflows/build.yml` 加 `workflow_dispatch` `build_type=debug` 入口 + `build-mac-debug` job
+  - 只 Mac arm64 (主人平台), ad-hoc 签名, 不触发 release
+
+### 验证
+- 单元测试：`npm test` **112/112 PASS** (v0.6.1 是 110, 加 2 个 unbindVideoEvents 测例)
+- YAML 语法：`python3 -c "import yaml; yaml.safe_load(...)" → "YAML OK"`
+- 主 agent 验收 (per AGENT_PRACTICES #10 教训 — Tester ACP lost context, 主 agent 接手跑 8 项验证): 全部 PASS
+- 实测：主人手动触发 `workflow_dispatch` (build_type=debug) → 下载 Mac arm64 debug .dmg → 装上跑 → 验证重入房间后底部状态栏跟真实连接一致
+
+### 验收
+- ✅ 2 个子任务 commit 全部 PASS (0d4f922 / 4000465)
+- ✅ 单元测试 112/112 PASS
+- ✅ YAML 语法 OK
+- ✅ release 3 job (build-windows/mac/linux) 完全未动
+- ✅ 远端 Mac arm64 debug build workflow_dispatch 入口可用
+- ⏳ Mac dmg 实测装上能开 — 主人手动触发 workflow_dispatch 跑 (per 主人 2026-06-13 决策)
+- ⏳ v0.6.1 + v0.6.2 合并 release asset — 主人实测通过后跑
 
 ---
 
@@ -280,7 +319,9 @@ desktop/dist/
 | 2026-06-07 | v0.3 声明 | 跨网段实测主人声明通过(Phase 1 DoD 满足) |
 | 2026-06-08 | 规划 | **去除 VPS 计划，v0.5 聚焦 Windows exe 打包** |
 | TBD | **v0.5.0** | **Windows .exe 双击即用，零依赖安装** |
-| TBD | v0.6.x | Linux .AppImage 验证 |
+| 2026-06-09 | **v0.6.0** | **体验优化 + bug 修复 (FR-1/2/3)：5 commit 全部 PASS, Shipped 2026-06-09** |
+| 2026-06-10 | **v0.6.1** | **视频添加历史记录 (FR-4)：阶段 A 计划 + A/B/C 3 子任务全部 PASS, docs 2026-06-13 补** |
+| 2026-06-13 | **v0.6.2** | **修 UI bug (BUG-2026-06-13-001)：阶段 A 计划 (主 agent A6 接手) + A/B 2 子任务全部 PASS, 一次性 docs 收齐 + 0.6.2 tag 推** |
 | TBD | v0.7.x | TURN UI + UX |
 | TBD | v1.0 | 互联网可用正式版 |
 

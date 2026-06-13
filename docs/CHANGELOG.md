@@ -3,7 +3,7 @@
 > **这是什么？** 历史版本变更记录——每个版本改了什么、新增了什么。  
 > **何时查阅？** 想看项目演进、某个功能是哪个版本加的。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-13
+> **最后更新：** 2026-06-13 (v0.6.2 阶段 C 收尾)
 
 ---
 
@@ -97,23 +97,74 @@
 
 ---
 
+## [0.6.2] - 2026-06-13
+
+### 🐛 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001) (v0.6.2)
+
+**目标**：修复 v0.6.0 + v0.6.1 release 后, 主人实测发现的重入房间 UI 状态不同步 bug.
+
+**根因**：
+- `src/shared/room-state.js:36` `TRANSITIONS.connecting` 过度约束, 只允许 `connecting → in_room_no_video / no_room`
+- `src/client/app.js:515-548` `recomputeRoomState()` 在 CONNECTING 状态时, 若 `myLoaded=true`, 试图 `setState(IN_ROOM_WAITING_PEER_VIDEO / _SYNCED / _MISMATCH)` → 静默 reject → 状态机卡在 CONNECTING
+- `src/client/app.js:675` `exitRoom()` 没清 `myVideoInfo`, 重入时陈旧状态干扰 → UI 黄色 waiting + `engine.start()` 永不被调
+- 但 `peer.on('open')` 绕过状态机直接 `updateLocalStatus("对方未连接")` (L265), UI 文案来自这里
+
+**修复**：
+- ✅ `src/shared/room-state.js:36` 放宽 `TRANSITIONS.connecting` 加 4 个 `in_room_*` 终态 (跟 FR-3 视频与房间解耦设计一致)
+- ✅ `test/unit/room-state.test.js` 反向断言改正向 (1 个 test 块测 4 个目标态)
+- ✅ `src/client/app.js:680` `exitRoom()` 加 `myVideoInfo = null` (防陈旧状态)
+
+**清理 (Claude 建议, 主 agent A6 接手实施 per #10 教训)**：
+- ✅ `src/client/app.js:263` `peer.on('open')` 改走 `recomputeRoomState()` + 防御性 fallback
+- ✅ `src/shared/sync-engine.js:52` `bindVideoEvents` 配对 `unbindVideoEvents()` + `destroy()` 调用, 防反复进房 listener 累积
+
+**远端 debug workflow** (主人决策: 远端先 debug, 实测通过后 release)：
+- ✅ `.github/workflows/build.yml` 加 `workflow_dispatch` `build_type=debug` choice 输入
+- ✅ 新增 `build-mac-debug` job: macos-latest, arm64, ad-hoc 签名, 不传 `CSC_LINK`
+- ✅ if 条件: `build_type == 'debug' && refs/heads/main` (per AGENT_PRACTICES #24 用 `startsWith` 而非 `matches`)
+- ✅ 上传 artifact `syncplay-mac-arm64-debug` (retention 7 days)
+- ✅ release 3 job (build-windows/mac/linux) 完全未动
+
+**Commits (本版本, 2 子任务 + 1 docs 收尾)**:
+- `0d4f922` fix(v0.6.2-A): 放宽 TRANSITIONS + 改测试 + exitRoom 清 myVideoInfo
+- `4000465` feat(v0.6.2-B): peer.on('open') 改走 recomputeRoomState + unbindVideoEvents + Mac arm64 debug workflow
+- `<v0.6.2-stage-c>` docs(v0.6.2): release status update + version bump (本 commit)
+
+**测试**:
+- 单元测试：`npm test` **112/112 PASS** (v0.6.1 是 110, 加 2 个 unbindVideoEvents 测例)
+- YAML 语法：`python3 -c "import yaml; yaml.safe_load(...)" → "YAML OK"`
+- 主 agent 验收 (per AGENT_PRACTICES #10 教训 — Tester ACP lost context, 主 agent 接手跑 8 项验证): 全部 PASS
+- v0.6.2-A Test Report: PASS (10 项验证, 含 TRANSITIONS 表改动 + 单元测试反向断言改正向 + exitRoom 清理)
+- v0.6.2-B Test Report: PASS (8 项验证, 含 peer.on('open') 走 recomputeRoomState + unbindVideoEvents 3 处 + workflow YAML OK + release jobs 未动)
+
+**验证状态**:
+- ✅ 2 个子任务 commit 全部 PASS (0d4f922 / 4000465)
+- ✅ 单元测试 112/112 PASS
+- ✅ YAML 语法 OK
+- ✅ 全角标点未坏 (3 文件改前 = 改后, 差 = 0)
+- ⏳ **release asset 推迟**: 主人 2026-06-13 决策: v0.6.1 + v0.6.2 合并出 release (主人实测 v0.6.2 Mac arm64 debug build 通过后跑)
+
+**文档**:
+- `docs/STATUS.md` 加 v0.6.2 已完成段 (本收尾)
+- `docs/ROADMAP.md` v0.6.2 状态改 ✅ Shipped + 加 v0.7 段 (本收尾)
+- `docs/CHANGELOG.md` 加本段 (本收尾)
+- `docs/MEETINGS.md` 加 #010 v0.6.2 完工纪要 (本收尾)
+
+**A6 文档**: `.agent-tasks/v0.6.2/v0.6.2-execution-plan.md` (不上库, 主 agent 接手 per #10)
+
+详见 [MEETINGS.md 会议 #009 阶段 A 计划](./MEETINGS.md) + #010 完工纪要 + [REQUIREMENTS.md BUG-2026-06-13-001](./REQUIREMENTS.md)
+
+---
+
 ## [未发布]
 
-### 下一版本 v0.6.2 计划（2026-06-13）
+### 下一版本 v0.7 计划（待拍, 主人实测 v0.6.2 debug build 通过后立项）
 
-**目标**：修 UI bug — 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); 同时 v0.6.1 + v0.6.2 合并出 release asset (远端先 debug, 主人实测通过后再 release)
-
-- [ ] **根因修复**：`src/shared/room-state.js:34` `TRANSITIONS.connecting` 加上 4 个 `in_room_*` 终态（跟 FR-3 哲学一致 — 视频与房间解耦）
-- [ ] **次要清理**：`src/client/app.js:exitRoom()` 加 `myVideoInfo = null`
-- [ ] **测试更新**：`test/unit/room-state.test.js` 1 个反向断言改正向
-- [ ] **附加清理（可选）**：`peer.on('open')` 改走 `recomputeRoomState()` + `SyncEngine.unbindVideoEvents()` 防 listener 累积
-- [ ] **远端 debug release**：GitHub Actions `workflow_dispatch` 跑 debug build (Mac arm64, 主人平台), **不**触发 release workflow
-- [ ] **主人实测**：Mac arm64 debug build 装上跑, 验证重入房间后底部状态栏跟真实连接一致
-- [ ] **release asset**：实测通过后, 跑 v0.6.1 + v0.6.2 合并 release (Mac .dmg + Windows .exe + Linux AppImage)
+**目标**：TURN UI / Linux AppImage 验证 / 移动端响应式 (待主人拍)
 
 ### 后续版本计划
 
-- **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化
+- **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化 + 移动端响应式
 - **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包 + 签名/公证）
 
 ---

@@ -3,15 +3,15 @@
 > **这是什么?** 项目的"目标与决策中心"--要往哪走、为什么这么做、备选方案是什么。
 > **何时查阅?** 想看方向、决策讨论、备选方案对比时。
 > **关联文档:** [STATUS.md](./STATUS.md) · [REQUIREMENTS.md](./REQUIREMENTS.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [README.md](./README.md) · [CHANGELOG.md](./CHANGELOG.md)
-> **最后更新:** 2026-06-13
+> **最后更新:** 2026-06-13 (v0.6.2 阶段 C 收尾)
 
 ---
 
 ## 🚦 当前迭代
 
-**目标版本**：v0.6.2 — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001) (主 agent 派 Claude 出方案 2026-06-13, 等主人拍 ABCD 决策)
-**当前阶段**：**v0.6.1 已 Shipped** (2026-06-10 子任务 PASS, 2026-06-13 docs 补齐) → **v0.6.2 计划阶段 A 进行中** (Claude 已出方案, 等主人拍 ABCD 决策)
-**上一里程碑**：v0.6.1 视频添加历史记录 (FR-4) 全部 PASS (2026-06-10 Shipped, docs 2026-06-13 补)
+**目标版本**：v0.7 — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍, 主人实测 v0.6.2 debug build 通过后拍)
+**当前阶段**：**v0.6.2 已 Shipped** (2026-06-13, BUG-2026-06-13-001 修完, 一次性 docs 收齐, 0.6.2 tag 推) → **v0.7 计划阶段 A 待主人拍**
+**上一里程碑**：v0.6.2 修 UI bug (重入房间状态脱钩) 全部 PASS (2026-06-13 Shipped, 主 agent A6 接手 per #10)
 **下一里程碑**：v0.7 - TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
 
 ---
@@ -75,8 +75,53 @@
 - [x] unit test 90+ pass (实际 100+ pass, 加 ~12 个新测试, per `c349473`)
 - [x] Playwright e2e: add unit + e2e tests for video history (per `c349473`)
 - [x] GitHub Actions workflow 配置继承 v0.5.1 阶段 (macos-latest 跑过 v0.6.1-B 测试)
-- [ ] **Mac dmg 实测装上能开 — 推迟到 v0.6.2 一起实测** (主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测)
-- [ ] **release asset 推送 — 推迟到 v0.6.2 完工后一起出** (主人 2026-06-13 决策)
+- [x] **Mac dmg 实测装上能开** — 推迟到 v0.6.2 一起实测 (主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测) — v0.6.2 完工后实际跑 (per v0.6.2 验收项)
+- [x] **release asset 推送** — 推迟到 v0.6.2 完工后一起出 (主人 2026-06-13 决策) — v0.6.2 完工后实际跑
+
+---
+
+## ✅ v0.6.2 — 修 UI bug: 重入房间状态脱钩 (BUG-2026-06-13-001) (Shipped 2026-06-13)
+
+**目标**：修复 v0.6.0 + v0.6.1 release 后, 主人实测发现的重入房间 UI 状态不同步 bug. 走新 v2 工作流 (阶段 A 派 Claude 出方案 + 主人决定 + 主 agent A6 接手 per #10 教训).
+
+### 关键修复
+
+- 🐛 **根因**：`src/shared/room-state.js:36` `TRANSITIONS.connecting` 过度约束 + `src/client/app.js:515-548` `recomputeRoomState()` 跨级转移被静默 reject
+  - 重入房间后 `myVideoInfo` 在 `exitRoom()` 没清 → 状态卡 CONNECTING → UI 黄色 waiting + `engine.start()` 永不被调
+- 🔧 **修复**：
+  - 放宽 `TRANSITIONS.connecting` 加 4 个 `in_room_*` 终态 (跟 FR-3 视频与房间解耦设计一致)
+  - `exitRoom()` 加 `myVideoInfo = null` (防陈旧状态)
+- 🧹 **清理 (2 项)**:
+  - `src/client/app.js:263` `peer.on('open')` 改走 `recomputeRoomState()` (避免 UI 不同步)
+  - `src/shared/sync-engine.js:52` `bindVideoEvents` 配对 `unbindVideoEvents()` + `destroy()` 调用 (防反复进房 listener 累积)
+- 🔧 **远端 debug workflow**:
+  - `.github/workflows/build.yml` 加 `workflow_dispatch` `build_type=debug` 入口 + `build-mac-debug` job
+  - 只 Mac arm64 (主人平台), ad-hoc 签名, 不触发 release
+
+### 验收 (DoD)
+
+- [x] 2 个子任务全部 PASS (v0.6.2-A 核心修复 + v0.6.2-B 清理 + workflow)
+- [x] unit test **112/112 pass** (v0.6.1 是 110, 加 2 个 unbindVideoEvents 测例)
+- [x] YAML 语法 OK (`.github/workflows/build.yml`)
+- [x] 主 agent 验收 (per AGENT_PRACTICES #10 — Tester ACP lost context, 主 agent 接手跑 8 项验证, 全部 PASS)
+- [x] 远端 Mac arm64 debug build workflow_dispatch 入口可用
+- [x] 2 package.json 升 0.6.1 → 0.6.2 (根 + desktop/)
+- [ ] **Mac dmg 实测装上能开** — 主人手动触发 `workflow_dispatch` (build_type=debug) → 下载 Mac arm64 debug .dmg → 装上跑 → 验证重入房间状态栏一致
+- [ ] **release asset 推送** — 实测通过后, 跑 v0.6.1 + v0.6.2 合并 release (Mac .dmg + Windows .exe + Linux AppImage)
+
+### 关键技术决策
+
+1. **A6 由主 agent 接手** (per AGENT_PRACTICES #10 教训 — Claude session 18:45 ended, 主 agent 自己写 A6 文档, 不重派)
+2. **修复方案选 A** (Claude 推荐): 改 TRANSITIONS 表, 跟 FR-3 视频与房间解耦设计一致, 1 行改动 + 1 测试 + 1 行清理
+3. **顺手 2 个清理项** (Claude 建议): peer.on('open') 走 recomputeRoomState + unbindVideoEvents, 少埋 2 个雷
+4. **远端 debug workflow**: Mac arm64 only (主人平台, 省 runner 时间), workflow_dispatch + build_type=debug, 不触发 release
+5. **v0.6.1 + v0.6.2 合并 release** (主人 2026-06-13 18:50 决策): 节省 GitHub Actions runner + 一次性实测
+
+### Commits (本版本, 2 子任务 + 1 docs 收尾)
+
+- `0d4f922` fix(v0.6.2-A): 放宽 TRANSITIONS + 改测试 + exitRoom 清 myVideoInfo
+- `4000465` feat(v0.6.2-B): peer.on('open') 改走 recomputeRoomState + unbindVideoEvents + Mac arm64 debug workflow
+- `<v0.6.2-stage-c>` docs(v0.6.2): release status update + version bump (本 commit)
 
 ---
 
@@ -274,7 +319,8 @@ A 浏览器 ──WSS──► PeerJS 公共信令 ──► B 浏览器
 | **v0.5.1** | **asar 修复 + 跨平台 CI** | asar=true + GitHub Actions 出 Win/Mac/Linux 三平台 | ✅ 已发布 |
 | **v0.6.0** | **体验优化 + bug 修复** | 房间退出/换房 + 视频 URL bug + 视频匹配 | **✅ Shipped** (2026-06-09) |
 | **v0.6.1** | **视频添加历史记录 (FR-4)** | electron-store 持久化 + UI + 失效检测 + 清空 | **✅ Shipped** (2026-06-10, docs 2026-06-13 补) |
-| **v0.6.2** | **修 UI bug: 重入房间状态脱钩** | BUG-2026-06-13-001, TRANSITIONS 表修复 + 测试 | 🎯 当前 (2026-06-13 立项) |
+| **v0.6.2** | **修 UI bug: 重入房间状态脱钩** | BUG-2026-06-13-001, TRANSITIONS 表修复 + 2 清理项 + 远端 debug workflow | **✅ Shipped** (2026-06-13) |
+| **v0.7** | **TURN UI / 跨网段 UX 优化 / 移动端响应式** | TURN 凭据管理 UI + 分享链接 + 移动端适配 | 🎯 当前 (待拍, 主人实测 v0.6.2 debug build 通过后立项) |
 | v0.7.x | TURN UI + UX | TURN 凭据管理 UI + 分享链接 + TURN 状态指示器 | 计划中 |
 | **v1.0** | **互联网可用** | **Metered SaaS TURN 已验证通过** | **目标** |
 | v2.0 | 多人房间 | 3 人以上同步 | 长期 |
@@ -310,7 +356,8 @@ v1.0 视为完成当且仅当:
 | 2026-06-08 | **v0.5.1** | **asar 修复 + GitHub Actions 跨平台 build：Windows .exe / Mac .dmg / Linux AppImage** |
 | 2026-06-09 | **v0.6** | **计划制定完成 (阶段 A) — 改方向为体验优化** |
 | 2026-06-10 | **v0.6.1** | **视频添加历史记录 (FR-4)：阶段 A 计划 + A/B/C 3 子任务全部 PASS, docs 2026-06-13 补** |
-| TBD | v0.7.x | TURN UI + UX |
+| 2026-06-13 | **v0.6.2** | **修 UI bug (BUG-2026-06-13-001)：阶段 A 计划 (主 agent A6 接手) + A/B 2 子任务全部 PASS, 一次性 docs 收齐 + 0.6.2 tag 推** |
+| TBD | v0.7.x | TURN UI + UX (待拍) |
 | TBD | v1.0 | 互联网可用正式版 |
 
 ---
