@@ -459,7 +459,119 @@
 
 *维护：Jarvis*
 *协作：主人（Bruce）*
-*最后更新：2026-06-09（token 配置失职教训 + 顺手升级 SSH key 方案）*
+
+
+---
+
+## 20. v0.6.x 工作流修订 v2 — 阶段 A 改派 Claude 双轮, 阶段 B 按 Claude 最终执行方案拆 (教训:2026-06-13)
+
+### 情境
+
+**时间**：2026-06-13（v0.6.2 立项时, 主人发现 v0.6.1 阶段 C 没收尾 + 改工作流）
+**触发**：
+1. 主人 18:33 发现 UI bug, 让主 agent 派 Claude 出修复计划
+2. 主 agent 18:33-18:40 按老流程 ad-hoc 派活, 主人 18:37 提醒"项目里有 agentWorkflowAndTemplates 工作流"
+3. 主 agent 18:45 Claude 返回修复计划, 主人 18:50 让主 agent 先收 v0.6.1 阶段 C
+4. **主人 18:55 + 19:03 改工作流** — 阶段 A 改派 Claude, 阶段 B 按 Claude 方案拆
+
+### 修订内容 (vs 老流程)
+
+| 老流程 (runbook v1, 2026-06-09) | 新流程 (runbook v2, 2026-06-13 主人修订) |
+|---|---|
+| 主 agent 复述理解 + 跟主人确认 | **主人只给现象 + 要求** |
+| 主 agent 自己写 plan + 派 Claude 让它做事 | **主 agent 派 Claude 出方案** (双轮 1) |
+| 主人拍方案 | **主人 + 主 agent 一起基于方案讨论 + 决定** |
+| 主 agent 写 plan → 阶段 B 拆任务 | **回流意见给 Claude** (双轮 2, 出最终执行方案) |
+| 主 agent 自己拆任务 | **阶段 B 按 A6 Claude 的最终执行方案拆** |
+
+### 阶段 A 双轮 Claude 流程 (主 agent 必做)
+
+```
+[A1] 主人: 说"现象 + 要求" (不给方案)
+  ↓
+[A2] 主 agent: 派 Claude 出"完整可行的技术方案/修复方案" (双轮 1)
+     - ACP harness: runtime: "acp", agentId: "claude", streamTo: "parent"
+     - --add-dir /Users/bruce/CodeProjects/syncplay
+     - 任务描述要明确: "请基于以下现象 + 要求, 给出完整可行的技术方案/修复方案 (诊断 + 修复步骤 + 测试验证 + 风险评估 + trade-off 选项)"
+  ↓
+[A3] Claude 方案给主人 + 主 agent (主 agent 整理摘要给主人)
+  ↓
+[A4] 主人 + 主 agent 一起讨论 trade-off + 拍板
+  ↓
+[A5] 决定后: 主 agent 用 sessions_send 回流意见给 Claude session
+     (含最终决定 + 偏好 + why)
+  ↓
+[A6] Claude 根据意见出"最终执行方案和步骤" (双轮 2)
+     - 具体任务清单 + 实施步骤 (N 个子任务)
+  ↓
+[A7] 主 agent: 写 MEETINGS 纪要 (含 Claude 双轮方案摘要)
+  ↓
+[A8] commit + push
+```
+
+### 阶段 B 拆任务依据 (v2 修订)
+
+- **不**是主 agent 自己拆
+- **是**根据阶段 A A6 Claude 的"最终执行方案和步骤"拆
+- N (子任务数) = Claude A6 给的子任务数
+- 每个子任务的"实现内容" = Claude A6 给的具体步骤
+- builder / tester 任务书内容 = Claude A6 方案 + 标准模板
+
+### 关键决策: 何时跳过 Claude, 主 agent 直接做
+
+| 场景 | 走新流程 (A1-A8)？ | 理由 |
+|---|---|---|
+| **bug 修复** (如 v0.6.2 UI bug) | ✅ 必须 | 主人原话: "出修改方案和计划的事交给cloude来做" |
+| **新需求** (如 v0.7 TURN UI) | ✅ 必须 | 主人原话: "针对新需求的技术方案" |
+| **纯 docs 收尾** (如 v0.6.1 阶段 C 收尾) | ❌ 直接做 | 升 package.json + 改 4 docs, 不需要 Claude 诊断 |
+| **流程修订** (如改 runbook.md) | ❌ 直接做 | 改的是事实记录, 不是技术方案 |
+| **小修补** (如改 commit message 错字) | ❌ 直接做 | 1 行改动, 不需要 Claude 方案 |
+
+### 踩的坑 (我犯了, 主人纠正)
+
+1. **18:33-18:45 主 agent ad-hoc 派活, 没按 runbook**
+   - 直接派 Claude 出"修复计划"写到 `tasks/v0.6.2/01-fix-plan.md` (错误路径 — 应该在 `.agent-tasks/v0.6.2/`)
+   - 没读 runbook.md 之前就开干
+   - 没读 STATUS / ROADMAP 之前就开干
+   - **主人 18:37 立刻纠正**: "你有使用agent工作流来做这件事吗, 项目里不是写了一个项目执行工作流？"
+
+2. **v0.6.1 阶段 C 没收尾**
+   - v0.6.1 子任务 2026-06-10 全部 PASS, 但阶段 C (升 package.json + 推 tag + 更新 docs) **没**做
+   - package.json 还是 0.6.0, 没 v0.6.1 tag, docs 还显示 v0.6.0 Shipped
+   - **违反 runbook 红线** "❌ 跳过阶段 C 直接汇报"
+   - **主人 18:50 纠正**: "先把0.6.1收尾, 补齐所有需要的文档"
+
+3. **v0.6.2 应该走新流程, 但当时没新流程**
+   - 18:33 派 Claude 时**没**新流程, 是按老流程 (主 agent 写 plan) 派活
+   - 18:55 主人改工作流, v0.6.2 还没拍 ABCD 决策
+   - **现状**: Claude 已出"修复计划" (v1, 当作 A2 初稿), 等主人拍 ABCD → 回流 → Claude 出 A6 最终执行方案
+
+### 加固 (避免下次再踩)
+
+| 规则 | 说明 |
+|---|---|
+| ✅ **新 session 接 syncplay 任务, 先读 runbook.md** | 第一件事, 不读不开干 |
+| ✅ **bug 修复 / 新需求 一律走新流程 A1-A8** | 主 agent 自己不出方案 |
+| ✅ **纯 docs 收尾 / 流程修订, 主 agent 直接做** | 不浪费 Claude |
+| ✅ **每个版本立项前查 STATUS.md** | 看上版本阶段 C 收没收尾 |
+| ✅ **阶段 C 收尾 = 一次性更新所有 docs** | 不在做事过程中更新 |
+| ❌ **不** ad-hoc 派 Claude 写"修复计划" 到 `tasks/` 错误路径 | 任务书放 `.agent-tasks/<version>/` |
+| ❌ **不** 主 agent 自己出诊断/修复方案 | 这是 Claude 的活 |
+| ❌ **不** 跳过阶段 C 直接做下版本 | 状态对不上, 主人看到的还是旧信息 |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` — 已按 v2 修订 (流程图 + 阶段 A 段 + 阶段 B B0/B-prep 段)
+- `docs/MEETINGS.md` #008 — v0.6.1 阶段 C 收尾会议纪要
+- `docs/MEETINGS.md` #009 — (待写) v0.6.2 阶段 A 会议纪要 (新流程首次实战)
+- AGENT_PRACTICES #17 (老 runbook 立过程) — 跟本条配合
+- MEMORY #14 (纠正指导立刻写文件) — 本条触发
+- MEMORY #28 (已 plan 不打扰) — 本条遵守
+
+---
+
+
+*最后更新：2026-06-13（v0.6.x 工作流修订 v2, 阶段 A 改派 Claude 双轮, 阶段 B 按 Claude 最终执行方案拆）*
 
 ## 12. macOS 系统代理 ≠ git 代理（开了代理但 git 不走）
 
