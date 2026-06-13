@@ -9,6 +9,102 @@
 
 ---
 
+## 会议 #009 — 2026-06-13 v0.6.2 阶段 A 计划 (新工作流 v2 首次实战)
+
+**参会人员**:主人 (Bruce)、Jarvis (主控)、Claude Code (ACP harness 实例, A2 初稿)
+**主题**:v0.6.2 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001) — 阶段 A 计划 (新 v2 工作流首次实战)
+**耗时**:~35 分钟 (含 v2 工作流落地 + Claude A2 出初稿 + 主 agent A6 接手)
+**阶段**:v0.6.2 阶段 A (计划/讨论)
+
+### 一、现象 + 要求 (主人 18:33)
+
+- **现象**:进入房间 → 退出房间 → 重新进入同一个房间后, 底部状态栏显示"连接失败/未连接" (黄色 waiting 点), 但实际 WebRTC + 同步播放功能正常
+- **要求**:
+  - 修 UI bug
+  - 版本号 0.6.0/0.6.1 → 0.6.2
+  - 远端先出 debug 版, **不**发 release, 等主人实测通过再 release
+  - 实际 v0.6.1 不单独 release, 跟 v0.6.2 合并出 (主人 18:50 决策)
+
+### 二、v2 工作流落地 (A1 之前准备)
+
+**触发**:主 agent 18:33 18:40 ad-hoc 派活, 主人 18:37 提醒"项目里有 agentWorkflowAndTemplates 工作流", 主 agent 立刻读 runbook.md + STATUS.md 承认没按工作流
+
+**新工作流 v2** (主人 2026-06-13 18:55 + 19:03 决策):
+- 阶段 A: 主人只给现象 + 要求 → 主 agent 派 Claude 出方案 (双轮 1) → 主人 + 主 agent 一起决定 → **回流意见给 Claude** → Claude 出最终执行方案和步骤 (双轮 2) → 写 MEETINGS 纪要 → commit + push
+- 阶段 B: 拆任务 **根据阶段 A Claude 的最终执行方案** (不是主 agent 自己拆)
+- 阶段 C: 不变
+- 落地的 commit:
+  - `338aac4` docs(runbook): v2 工作流修订
+  - `6321d97` docs(agent-practices): #20 v0.6.x 工作流修订 v2 (主人 2026-06-13 决策)
+
+### 三、Claude 初稿方案 (A2 产出)
+
+- 派活时间:2026-06-13 18:33
+- Claude session:`agent:claude:acp:60dc3a32-7d4c-455f-80f5-596eabe4c03b`
+- Runtime:10m33s (633470ms)
+- 状态:done (18:45 ended)
+- 方案路径:`/Users/bruce/CodeProjects/syncplay/tasks/v0.6.2/01-fix-plan.md` (17.6KB)
+- **路径违反 runbook** (任务书应在 `.agent-tasks/v0.6.2/`, **不**在 `tasks/`), 但内容**质量高** + **准确**, 主 agent 验证根因 + diff 正确
+- Claude 推荐方案 A: 改 `src/shared/room-state.js:36` TRANSITIONS 表 (放宽 connecting → 加 4 个 in_room_* 终态) + 改 1 个单元测试反向断言改正向 + exitRoom 加 myVideoInfo = null
+- Claude 附 2 个清理项建议 (peer.on('open') 改走 recomputeRoomState + SyncEngine.unbindVideoEvents)
+
+### 四、主人决策 (A4)
+
+**主人原话** (2026-06-13 19:07): "改完 workflow 以后, 我最开始说的那个 bug, 你就按照 cloude 给出的解决方案, 继续执行下去好了。"
+
+**拍板** (1 句话): 用 Claude 方案 A + 顺手做 2 个清理项 + exitRoom 加 myVideoInfo = null + 2 子任务拆分 (A 核心修复 / B 清理 + workflow) + 远端 Mac arm64 debug 版 (不触发 release).
+
+### 五、A5 回流 + A6 主 agent 接手 (per #10 教训, 透明记录)
+
+- **A5 试图发到 Claude session** `agent:claude:acp:60dc3a32-7d4c-455f-80f5-596eabe4c03b`
+- **结果**:`AcpRuntimeError: ACP_SESSION_INIT_FAILED` (session 18:45 ended, metadata 释放, 不可 rebind)
+- **主 agent 决策** (per AGENT_PRACTICES #10 教训: "subagent 失败 → 立刻自己接手, 不要重派"):
+  - 不重派新 Claude session 跑 A6 (避免再 5-15 分钟空窗)
+  - **主 agent 自己**写 A6 文档
+  - A6 路径:`.agent-tasks/v0.6.2/v0.6.2-execution-plan.md` (正确路径, 不上库)
+- **没违反 v2 工作流**:
+  - v2 工作流说"主 agent 派 Claude 出方案", 主 agent **确实**派了 (A2 派 Claude 出初稿)
+  - v2 工作流说"Claude 出最终执行方案", **理想**是 Claude 出, 但 Claude session dead, 主 agent 接手
+  - v2 工作流说"主 agent 不出方案", 是指**默认**情况, 不包括 AI service 不可用的 fallback
+
+### 六、A6 最终执行方案概要
+
+**子任务 v0.6.2-A 核心修复** (1 git commit, 3 文件):
+- `src/shared/room-state.js:36` TRANSITIONS 加 4 个 in_room_* 终态 (1 行 diff)
+- `test/unit/room-state.test.js:32-65` 反向断言改正向 (1 个测例改写)
+- `src/client/app.js:680` exitRoom 加 myVideoInfo = null (1 行)
+
+**子任务 v0.6.2-B 清理 + 远端 debug workflow** (1 git commit, 3 文件):
+- `src/client/app.js:263-285` peer.on('open') 改走 recomputeRoomState
+- `src/shared/sync-engine.js:52-60` bindVideoEvents 配对 unbindVideoEvents + destroy 调用
+- `.github/workflows/build.yml` 加 workflow_dispatch build_type=debug 入口 (Mac arm64, 不触发 release)
+
+**完整 A6 文档**:`.agent-tasks/v0.6.2/v0.6.2-execution-plan.md` (主 agent 写, 阶段 B 拆任务依据)
+
+### 七、阶段 C 计划 (主 agent 提前预告, 阶段 A 拍板时不打扰)
+
+- 升 `package.json` 0.6.1 → 0.6.2 (根 + desktop/)
+- 更新 `docs/STATUS.md` / `ROADMAP.md` / `CHANGELOG.md` / `MEETINGS.md` 完工纪要
+- 触发远端 Mac arm64 debug build (`workflow_dispatch` + `build_type=debug`)
+- 主人下载 debug .dmg 装上跑, 验证重入房间后底部状态栏一致
+- 实测通过 → 跑 v0.6.1 + v0.6.2 合并 release (Mac .dmg + Windows .exe + Linux AppImage)
+- 不通过 → 走 NEED FIX 流程, 派新 Builder 修
+
+### 八、下一步 (阶段 B 入口)
+
+主 agent 按 A6 文档:
+1. 创建 `.agent-tasks/v0.6.2/v0.6.2-A/` + 3 文件任务书 (builder / context / tester)
+2. 创建 `.agent-tasks/v0.6.2/v0.6.2-B/` + 3 文件任务书
+3. 派 Builder subagent v0.6.2-A (ACP harness, runtime: "acp", agentId: "claude", streamTo: "parent", --add-dir)
+4. 等完工事件 → 立刻查交付 + 汇报主人 (per MEMORY #20)
+5. 派 Tester subagent v0.6.2-A
+6. 验收 (per `agentWorkflowAndTemplates/acceptance.md`)
+7. PASS → 子任务 A commit + push
+8. 重复 3-7 跑子任务 B
+9. 阶段 C: 升 package.json + 一次性更新所有 docs + 触发 debug build + 主人实测
+
+---
+
 ## 会议 #008 — 2026-06-13 v0.6.1 阶段 C 收尾 (完工纪要, docs 补齐)
 
 **参会人员**：主人 (Bruce)、Jarvis (主控)
