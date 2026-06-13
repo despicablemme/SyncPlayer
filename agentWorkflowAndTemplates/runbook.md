@@ -225,29 +225,46 @@ await sessions_yield();  // 等完工事件
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  阶段 A: 落实目标 (plan/讨论)                    │
-│  ─────────────────────────────                  │
-│  主人说"下一阶段目标 = X"                       │
+│  阶段 A: 落实目标 (plan/讨论) [v2, 2026-06-13]  │
+│  ─────────────────────────────────────          │
+│  [A1] 主人说"现象 + 要求" (不给方案)           │
 │         ↓                                       │
-│  主 agent: 复述理解 + 跟主人确认                │
+│  [A2] 主 agent: 派 Claude 出"完整可行的         │
+│         技术方案/修复方案" (ACP harness)         │
+│         - runtime: "acp", agentId: "claude"     │
+│         - streamTo: "parent"                    │
+│         - --add-dir /Users/bruce/.../syncplay    │
 │         ↓                                       │
-│  主 agent: 更新文档 (plan 类)                   │
-│    - ROADMAP.md (路线图决策)                    │
-│    - REQUIREMENTS.md (需求变更, 如有)           │
-│    - MEETINGS.md (会议纪要 — 讨论了什么决定什么) │
+│  [A3] Claude 方案给主人 + 主 agent (双轮 1)     │
+│         ↓                                       │
+│  [A4] 主人 + 主 agent 一起基于方案讨论 + 决定   │
+│         ↓                                       │
+│  [A5] 决定后: 回流我们的意见给 Claude            │
+│         (含最终决定 + 偏好 + why)               │
+│         ↓                                       │
+│  [A6] Claude 根据意见制定"最终执行方案和步骤"   │
+│         (具体任务清单 + 实施步骤) (双轮 2)       │
+│         ↓                                       │
+│  [A7] 主 agent: 写 MEETINGS 纪要 (记录决定)     │
+│    - MEETINGS.md 会议纪要 (含 Claude 初稿 + 讨论 │
+│      + 决定 + Claude 最终执行方案 + why)         │
+│    - ROADMAP.md (路线图更新)                    │
 │    - 其他相关 docs                               │
 │         ↓                                       │
-│  commit + push "plan: <目标> 计划 + 会议纪要"    │
+│  [A8] commit + push "plan: <目标> 计划 + 纪要"  │
 │         ↓                                       │
-│  ❌ 不写任务书  ❌ 不派活  ❌ 不动 STATUS        │
+│  ❌ 不写任务书  ❌ 不派 Builder/Tester          │
+│  ❌ 不动 STATUS  ❌ 不让 Claude 直接做事        │
 └─────────────────────────────────────────────────┘
          ↓
 ┌─────────────────────────────────────────────────┐
-│  阶段 B: 实现 (做事)                              │
-│  ──────────────────                              │
-│  拆任务 → N 个原子子任务                         │
+│  阶段 B: 实现 (做事) [v2, 2026-06-13]            │
+│  ───────────────────────────────                │
+│  [B0] 拆任务 — **根据阶段 A Claude 的最终执行   │
+│         方案** 决定每个子步骤 (不是主 agent 自己 │
+│         拆, 而是按 A6 Claude 给的任务清单)       │
 │         ↓                                       │
-│  写 3 文件 × N:                                  │
+│  [B-prep] 写 3 文件 × N:                         │
 │    - tasks/<id>-builder.md                       │
 │    - tasks/<id>-context.md                       │
 │    - tasks/<id>-tester.md                        │
@@ -296,21 +313,27 @@ await sessions_yield();  // 等完工事件
 
 ## 🎯 阶段 A: 落实目标 (plan/讨论) — 主 agent 详细动作
 
-### 做什么
+### 做什么 (v2 — 主人 2026-06-13 修订)
 
-1. **接收目标** — 主人说 "下一阶段目标 = X"
-2. **复述理解** — 一句话总结 + 关键决策点
-3. **跟主人确认** — 等主人说"对"才进 [A4]
-4. **更新文档** (plan 类)：
-   - `docs/ROADMAP.md` — 新目标的路线图决策
+1. **[A1] 主人说"现象 + 要求"** — 主人只描述问题/需求, **不**给方案 (主 agent 也不要自己出方案)
+2. **[A2] 主 agent: 派 Claude 出"完整可行的技术方案/修复方案"** (双轮的第 1 轮)
+   - 用 ACP harness 模式: `runtime: "acp"`, `agentId: "claude"`, `streamTo: "parent"`
+   - `claude --add-dir /Users/bruce/CodeProjects/syncplay -p "<任务描述>"`
+   - 任务描述要明确: "请基于以下现象 + 要求, 给出**完整可行的技术方案/修复方案** (诊断 + 修复步骤 + 测试验证 + 风险评估 + trade-off 选项)"
+3. **[A3] Claude 方案给主人 + 主 agent 两人** — 主 agent 整理 Claude 输出, 给主人完整摘要
+4. **[A4] 主人 + 主 agent 一起基于方案讨论 + 决定** — 讨论 trade-off, 拍板方案 (派活的 trade-off 决策走主 agent 跟主人一轮对话)
+5. **[A5] 决定后: 回流我们的意见给 Claude** — 主 agent 用 `sessions_send` 把"决定 + 偏好 + why" 发回给 Claude session
+6. **[A6] Claude 根据意见制定"最终执行方案和步骤"** (双轮的第 2 轮) — 具体任务清单 + 实施步骤 (后续阶段 B 拆任务的依据)
+7. **[A7] 主 agent: 写 MEETINGS 纪要** (plan 类)：
+   - `docs/MEETINGS.md` — 会议纪要 (含 Claude 初稿摘要 + 我们讨论 + 决定 + Claude 最终执行方案 + why)
+   - `docs/ROADMAP.md` — 路线图更新
    - `docs/REQUIREMENTS.md` — 需求变更（如果有）
-   - `docs/MEETINGS.md` — 会议纪要（讨论了什么、决定什么、why）
    - 其他相关 docs（如 `docs/TECH_RESEARCH.md` 如有技术调研）
-5. **commit + push**:
+8. **[A8] commit + push**:
    ```bash
    cd ~/CodeProjects/syncplay
    git add docs/ROADMAP.md docs/REQUIREMENTS.md docs/MEETINGS.md
-   git commit -m "plan(<目标-id>): <一句话目标> + 会议纪要"
+   git commit -m "plan(<目标-id>): <一句话目标> + 会议纪要 (含 Claude 双轮方案)"
    git push origin main
    # 验证 (per #15)
    git fetch origin main
@@ -319,19 +342,31 @@ await sessions_yield();  // 等完工事件
 
 ### 不做什么
 
+- ❌ **主 agent 自己出诊断/修复方案** — 这是 Claude 的活
+- ❌ **主人给方案** — 主人只给现象 + 要求
+- ❌ **跳过 Claude 派活, 直接做事** — 必须先走 A2-A6
 - ❌ 写任务书 (阶段 B 才写)
-- ❌ 派 subagent (阶段 B 才派)
+- ❌ 派 Builder/Tester (阶段 B 才派)
 - ❌ 更新 STATUS.md (阶段 C 才更新 — STATUS 反映"已完成", 不是"计划中")
 - ❌ 写 CHANGELOG (阶段 C 才写)
-- ❌ 让 Claude Code 做事 (阶段 B 才让)
+- ❌ 让 Claude Code 写代码 (阶段 B 才让)
 
 ### 主人介入点
 
-- 1 次（确认主 agent 的理解 + 同意 plan 文档）
+- **2 次** (升级自原 1 次):
+  1. 阶段 A4 — 跟主 agent 一起基于 Claude 初稿讨论 trade-off, 拍板
+  2. 阶段 A6 之后 — review Claude 最终执行方案 (可选, 信任则免)
+- 总耗时增加: 5-15 → 15-40 分钟 (双轮 Claude)
 
 ### 耗时
 
-5-15 分钟
+15-40 分钟 (双轮 Claude 各 5-15 分钟 + 主人决策 + 写 MEETINGS)
+
+### 关键决策: 何时跳过 Claude, 主 agent 直接做
+
+- **纯 docs 收尾** (如 v0.6.1 阶段 C 收尾, 升 package.json + 改 4 docs) — **不**走新流程, 主 agent 直接做
+- **流程修订** (如改 runbook.md) — **不**走新流程, 主 agent 直接做
+- **bug 修复 / 新需求** — **必须**走新流程 (A1-A8 完整)
 
 ---
 
@@ -339,17 +374,25 @@ await sessions_yield();  // 等完工事件
 
 ### 做什么
 
-#### B0: 拆任务
+#### B0: 拆任务 [v2, 2026-06-13 修订]
 
-- 把目标拆成 **N 个原子子任务**（每个 = 1 个 git commit, 1-3 个文件, 1 个明确功能）
+- **拆任务的依据 = 阶段 A Claude 的"最终执行方案和步骤" (A6 产出)**
+  - 不是主 agent 自己拆
+  - Claude 在 A6 已经定好了"具体任务清单 + 实施步骤", 主 agent 把它**转成** N 个原子子任务
+- 每个子任务 = 1 个 git commit, 1-3 个文件, 1 个明确功能
 - 给每个 ID: `<目标-id>-<sub-id>`（如 `v0.6.0-macos-install-doc-1`）
 - **不**太大不**太小**（太大拆小, 太小合并）
+- N 的数量 = Claude A6 给的子任务数
+- 每个子任务的**实现内容** = Claude A6 给的具体步骤
 
 #### B-prep: 写任务书 (3 文件 × N)
 
 - 用 `templates/builder-task.md` 写 `tasks/<id>-builder.md`
 - 用 `templates/context-summary.md` 写 `tasks/<id>-context.md`
 - 用 `templates/tester-task.md` 写 `tasks/<id>-tester.md`
+- **任务书内容依据 = 阶段 A Claude 的"最终执行方案和步骤" (A6 产出)**
+  - 每个 builder 任务书的"实现内容"段 = Claude A6 给该子任务的具体步骤
+  - 每个 tester 任务书的"验证清单"段 = Claude A6 给该子任务的测试验证方案
 - 关键约束:
   - 必读 context 用**绝对路径** (`/Users/bruce/...`) 不依赖 `~` (per #16)
   - 任务书**必含**"自我验证"段 (per #16)
