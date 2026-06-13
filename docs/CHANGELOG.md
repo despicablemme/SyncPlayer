@@ -3,7 +3,7 @@
 > **这是什么？** 历史版本变更记录——每个版本改了什么、新增了什么。  
 > **何时查阅？** 想看项目演进、某个功能是哪个版本加的。  
 > **关联文档：** [STATUS.md](./STATUS.md) · [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md)  
-> **最后更新：** 2026-06-08
+> **最后更新：** 2026-06-13
 
 ---
 
@@ -43,19 +43,76 @@
 
 ---
 
+## [0.6.1] - 2026-06-10
+
+### 🆕 视频添加历史记录 (FR-4) (v0.6.1)
+
+**目标**：用户选完本地/在线视频后，记录被持久化, 下次打开应用能一键从历史里重新选择对应视频, 不用重新粘贴 URL 或重新选文件。
+
+**架构**：
+- **新增** 主进程 `desktop/main.js`：`videoHistoryStore = new Store({name: 'video-history'})` (electron-store) + 5 个 IPC handler (`video-history:get` / `add` / `remove` / `clear` / `check-exists`)
+- **新增** `desktop/preload.js`：暴露 `desktopAPI.videoHistory.{get, add, remove, clear, checkExists}` 给 renderer
+- **新增** `desktop/package.json`：`"electron-store": "^8.2.0"`
+- **新增** `src/client/index.html`：`video-history-section` div + 列表 + footer
+- **新增** `src/client/style.css`：11 个相关样式类（`.video-history-section` / `.video-history-list` / `.video-history-item` / `.video-history-missing` 等）
+- **新增** `src/client/app.js`：自动写记录（`video.loadedmetadata` 事件触发）+ 一键重选 + 失效检测
+
+**功能**：
+- ✅ **持久化**：`app.getPath('userData')/video-history.json` (electron-store 默认位置)
+- ✅ **记录时机**：`videoloadedmetadata` 事件自动写入
+- ✅ **字段**：本地 `{type: 'local', path, name, size, mtime, addedAt}` / URL `{type: 'url', url, title, addedAt}`
+- ✅ **历史 UI**：视频选择对话框 "📜 历史" 按钮 + 最近 20 条
+- ✅ **一键重选**：本地 `loadVideo('file://'+path)` / URL `loadVideo(url, title)`
+- ✅ **失效检测**：本地 `fs.existsSync(path)` + URL `video.error` 监听
+- ✅ **失效标记**：灰显 + "⚠️ 文件已移动/删除" 提示
+- ✅ **删除/清空**：单条删除 + "清空所有"按钮（带确认）
+
+**Commits (本版本, 7 个全部 PASS)**:
+- `31ca692` plan(v0.6.1): 视频添加历史记录 计划 + 会议纪要
+- `19bd524` feat(v0.6.1-A): add video history persistence (electron-store + IPC)
+- `0644ac8` test(v0.6.1-A): add test report for main-process-preload-infra
+- `88f27b2` feat(v0.6.1-B): video history UI in renderer
+- `e0fe399` fix(v0.6.1-B): add 清空所有 button + wire videoHistory.clear()
+- `c020d16` test(v0.6.1-B): add test report for video-history-ui
+- `c349473` test(v0.6.1): add unit + e2e tests for video history
+
+**测试**:
+- 单元测试：`npm test` 100+ pass (v0.6.0 是 88, 加 ~12 个新测试, per `c349473`)
+- v0.6.1-A Test Report: PASS（IPC handler 5 个全验 + electron-store 集成）
+- v0.6.1-B Test Report: PASS（UI 元素 + 集成 + 自定义 test-b-main.js + test-b-preload.js 跑过）
+- Playwright e2e：add unit + e2e tests for video history (per `c349473`)
+
+**验证状态**:
+- ✅ 7 个 v0.6.1 commit 全部 PASS
+- ✅ 单元测试 + e2e 测试全绿
+- ⏳ **release asset 推迟到 v0.6.2 一起出** (主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测)
+
+**文档**:
+- `docs/STATUS.md` 加 v0.6.1 已完成段（2026-06-13 补）
+- `docs/ROADMAP.md` v0.6.1 状态改 ✅ Shipped（2026-06-13 补）
+- `docs/CHANGELOG.md` 加本段（2026-06-13 补）
+- `docs/MEETINGS.md` 加 #008 v0.6.1 完工纪要（2026-06-13 补）
+
+详见 [MEETINGS.md 会议 #007 计划](./MEETINGS.md) + #008 完工纪要 + [REQUIREMENTS.md FR-4](./REQUIREMENTS.md)
+
+---
+
 ## [未发布]
 
-### 下一版本 v0.6.x 计划（2026-06-08）
+### 下一版本 v0.6.2 计划（2026-06-13）
 
-**目标**：Linux AppImage 验证 + macOS 用户安装说明（quarantine 提示）
+**目标**：修 UI bug — 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); 同时 v0.6.1 + v0.6.2 合并出 release asset (远端先 debug, 主人实测通过后再 release)
 
-- [ ] Linux AppImage 在裸 Ubuntu / Debian 环境实测
-- [ ] 文档化 macOS Gatekeeper quarantine 临时解法
-- [ ] （可选）找朋友在全新 Windows 环境实测 .exe
+- [ ] **根因修复**：`src/shared/room-state.js:34` `TRANSITIONS.connecting` 加上 4 个 `in_room_*` 终态（跟 FR-3 哲学一致 — 视频与房间解耦）
+- [ ] **次要清理**：`src/client/app.js:exitRoom()` 加 `myVideoInfo = null`
+- [ ] **测试更新**：`test/unit/room-state.test.js` 1 个反向断言改正向
+- [ ] **附加清理（可选）**：`peer.on('open')` 改走 `recomputeRoomState()` + `SyncEngine.unbindVideoEvents()` 防 listener 累积
+- [ ] **远端 debug release**：GitHub Actions `workflow_dispatch` 跑 debug build (Mac arm64, 主人平台), **不**触发 release workflow
+- [ ] **主人实测**：Mac arm64 debug build 装上跑, 验证重入房间后底部状态栏跟真实连接一致
+- [ ] **release asset**：实测通过后, 跑 v0.6.1 + v0.6.2 合并 release (Mac .dmg + Windows .exe + Linux AppImage)
 
 ### 后续版本计划
 
-- **v0.6.x**：Linux AppImage 验证 + macOS 安装文档化
 - **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化
 - **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包 + 签名/公证）
 

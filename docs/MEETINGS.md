@@ -9,6 +9,76 @@
 
 ---
 
+## 会议 #008 — 2026-06-13 v0.6.1 阶段 C 收尾 (完工纪要, docs 补齐)
+
+**参会人员**：主人 (Bruce)、Jarvis (主控)
+**主题**：v0.6.1 视频添加历史记录 (FR-4) — 阶段 C 收尾 (补齐 docs, 不动代码)
+**耗时**：~15 分钟 (纯文档 + 版本号)
+**阶段**：v0.6.1 阶段 C (完工后 docs 统一更新)
+
+### 一、背景
+
+v0.6.1 子任务 A + B + C 实际在 **2026-06-10 全部完工** (7 个 commit 全部 PASS, 单元测试 + e2e 测试全绿)。但主人 2026-06-13 接 v0.6.2 UI bug 修复任务时, 主 agent 才**发现** v0.6.1 阶段 C 没收尾:
+
+- `package.json` 还是 0.6.0 (**没升**)
+- `desktop/package.json` 也是 0.6.0
+- **没**推 `v0.6.1` tag
+- `docs/STATUS.md` / `ROADMAP.md` / `CHANGELOG.md` / `MEETINGS.md` 全部还显示 v0.6.0 Shipped
+
+**违反 runbook 红线** "❌ 跳过阶段 C 直接汇报"。本次会议**收尾** v0.6.1 阶段 C, 补齐所有 docs。
+
+### 二、主人决策 (3 件)
+
+1. **v0.6.1 不单独出 release asset** — 跟 v0.6.2 合并出, 一起实测
+2. **v0.6.1 tag 推** — 补 `git tag v0.6.1` + push, 纯 git tag, **不**触发 GitHub Actions release workflow
+3. **v0.6.2 改工作流** — 阶段 A 改派 Claude 出方案 (主人原话: "以后第一步不是我和你出计划, 我只给你传递现象, 和要求. 出修改方案和计划的事交给cloude来做"), 详见 #009 会议纪要
+
+### 三、交付清单 (5 commit + 1 tag, 全部 PASS)
+
+| Commit / Tag | 内容 | 模式 |
+|---|---|---|
+| `31ca692` | plan(v0.6.1): 视频添加历史记录 计划 + 会议纪要 | 阶段 A 主 agent |
+| `19bd524` | feat(v0.6.1-A): add video history persistence (electron-store + IPC) | Builder ACP |
+| `0644ac8` | test(v0.6.1-A): add test report for main-process-preload-infra | Tester ACP |
+| `88f27b2` | feat(v0.6.1-B): video history UI in renderer | Builder ACP |
+| `e0fe399` | fix(v0.6.1-B): add 清空所有 button + wire videoHistory.clear() | Builder ACP (fix) |
+| `c020d16` | test(v0.6.1-B): add test report for video-history-ui | Tester ACP |
+| `c349473` | test(v0.6.1): add unit + e2e tests for video history | Tester ACP |
+| **(本会议)** | `docs(v0.6.1): release status update + version bump` | 主 agent 阶段 C 收尾 |
+| **v0.6.1** (tag) | 补推 git tag, **不**触发 release workflow | 主 agent |
+
+### 四、关键技术决策
+
+1. **release 策略变更**：v0.6.1 release 合并到 v0.6.2, 一起出 release asset + 一起实测
+   - **理由**：避免重复跑 GitHub Actions runner, 节省时间; 实测一次性跑 v0.6.1+v0.6.2 更高效
+2. **docs 补齐范围**：4 个 docs (STATUS / ROADMAP / CHANGELOG / MEETINGS) + 2 个 package.json 版本号
+3. **commit + push 策略**：用 Python 写 (per AGENT_PRACTICES #13 教训, 不用 edit 工具避免全角标点被改坏)
+4. **tag push 后必须 fetch 验证** (per AGENT_PRACTICES #15 教训 — LibreSSL SSL_ERROR_SYSCALL 假阳性)
+
+### 五、阶段 C 收尾工作 (主 agent 一次性完成)
+
+1. ✅ 升 `package.json` 0.6.0 → 0.6.1 (根)
+2. ✅ 升 `desktop/package.json` 0.6.0 → 0.6.1
+3. ✅ 更新 `docs/STATUS.md` — 加 v0.6.1 已完成段, 改"🚦 一句话状态"
+4. ✅ 更新 `docs/ROADMAP.md` — v0.6.1 状态 ✅ Shipped, 改"🚦 当前迭代"
+5. ✅ 更新 `docs/CHANGELOG.md` — 加 `[0.6.1] - 2026-06-10` release 段
+6. ✅ 更新 `docs/MEETINGS.md` — 加本段 #008 完工纪要
+7. ✅ commit "docs(v0.6.1): release status update + version bump" + push + fetch 验证
+8. ✅ 推 `v0.6.1` tag + fetch 验证
+9. ⏸ **不**触发 GitHub Actions release workflow (v0.6.1 release 合并到 v0.6.2)
+
+### 六、commit 列表 (本次主 agent 阶段 C 收尾)
+
+| Commit | 内容 |
+|---|---|
+| `<v0.6.1-stage-c>` | docs(v0.6.1): release status update + version bump — 2 package.json 升 0.6.0→0.6.1, 4 docs 补齐 |
+
+### 七、下一步
+
+主 agent 按新工作流跑 v0.6.2 (详见 #009 会议纪要 — 改派 Claude 出方案) → 等主人拍 v0.6.2 ABCD 决策 → 阶段 B 拆任务 → 派 Builder ACP + Tester ACP → 完工 → v0.6.1 + v0.6.2 合并出 release asset。
+
+---
+
 ## 会议 #007 — 2026-06-10 v0.6.1 目标确认 (计划阶段 A)
 
 **参会人员**：主人 (Bruce)、Jarvis (主控)

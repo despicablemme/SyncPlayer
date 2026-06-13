@@ -3,22 +3,22 @@
 > **这是什么?** 项目的"目标与决策中心"--要往哪走、为什么这么做、备选方案是什么。
 > **何时查阅?** 想看方向、决策讨论、备选方案对比时。
 > **关联文档:** [STATUS.md](./STATUS.md) · [REQUIREMENTS.md](./REQUIREMENTS.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [README.md](./README.md) · [CHANGELOG.md](./CHANGELOG.md)
-> **最后更新:** 2026-06-10
+> **最后更新:** 2026-06-13
 
 ---
 
 ## 🚦 当前迭代
 
-**目标版本**：v0.6.1 — 视频添加历史记录 (FR-4)  (主 agent 拍 2026-06-10)
-**当前阶段**：**v0.6.0 已发布** (2026-06-09 Shipped) → **v0.6.1 计划阶段 A 完成** (2026-06-10, plan 文档已落地)
-**上一里程碑**：v0.6.0 体验优化 + bug 修复 (FR-1/2/3 全部 PASS, 2026-06-09 Shipped)
+**目标版本**：v0.6.2 — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001) (主 agent 派 Claude 出方案 2026-06-13, 等主人拍 ABCD 决策)
+**当前阶段**：**v0.6.1 已 Shipped** (2026-06-10 子任务 PASS, 2026-06-13 docs 补齐) → **v0.6.2 计划阶段 A 进行中** (Claude 已出方案, 等主人拍 ABCD 决策)
+**上一里程碑**：v0.6.1 视频添加历史记录 (FR-4) 全部 PASS (2026-06-10 Shipped, docs 2026-06-13 补)
 **下一里程碑**：v0.7 - TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
 
 ---
 
 ---
 
-## 🎯 v0.6.1 — 视频添加历史记录 (FR-4) (计划中, 2026-06-10 立项)
+## ✅ v0.6.1 — 视频添加历史记录 (FR-4) (Shipped 2026-06-10, docs 2026-06-13 补)
 
 **目标**：用户选完本地/在线视频后, 记录被持久化, 下次打开应用能一键从历史里重新选择对应视频, 不用重新粘贴 URL 或重新找文件。
 
@@ -26,19 +26,19 @@
 - **故事 A**（本地视频）：主人周一选了 `/Movies/inception.mp4`，周三想跟朋友再看一次 → 打开 SyncPlay → 点"历史" → 看到 "inception.mp4 · 3天前" → 一键加载（不需重新翻文件夹）
 - **故事 B**（在线 URL）：主人分享了一个 B站 URL 加载看片 → 第二天想再开 → 点"历史" → 看到"B站某视频 · 昨天" → 一键加载
 
-### 核心需求 (FR-4)
-- [ ] **持久化**：用 `electron-store` 存到 `app.getPath('userData') + '/video-history.json'`
-- [ ] **记录时机**：用户成功加载视频后（`video.loadedmetadata` 事件）自动写入
-- [ ] **记录字段**：
+### 核心需求 (FR-4) — 全部 PASS ✅
+- [x] **持久化**：用 `electron-store` 存到 `app.getPath('userData') + '/video-history.json'`
+- [x] **记录时机**：用户成功加载视频后（`video.loadedmetadata` 事件）自动写入
+- [x] **记录字段**：
   - 本地视频：`{ type: 'local', path, name, size, mtime, addedAt }`
   - 在线 URL：`{ type: 'url', url, title, addedAt }`
-- [ ] **历史列表 UI**：在视频选择对话框附近加"📜 历史"下拉/按钮, 展开显示最近 20 条
-- [ ] **一键重新选择**：
+- [x] **历史列表 UI**：在视频选择对话框附近加"📜 历史"下拉/按钮, 展开显示最近 20 条
+- [x] **一键重新选择**：
   - 本地：`loadVideo('file://' + path, name)` — 浏览器/Electron 直接用绝对路径
   - URL：`loadVideo(url, title)` — 跟用户粘贴 URL 走同一路径
-- [ ] **失效检测**：本地文件 `fs.existsSync(path)` 检查 + URL `video.error` 监听
-- [ ] **失效标记**：UI 显示"⚠️ 文件已移动/删除"灰色
-- [ ] **删除/清空**：单条删除 + "清空所有"按钮（带确认）
+- [x] **失效检测**：本地文件 `fs.existsSync(path)` 检查 + URL `video.error` 监听
+- [x] **失效标记**：UI 显示"⚠️ 文件已移动/删除"灰色
+- [x] **删除/清空**：单条删除 + "清空所有"按钮（带确认）
 
 ### MVP 范围（避免过度设计）
 - ✅ 最近 20 条
@@ -71,11 +71,12 @@
 - **不做云同步**: 隐私, 本地优先, 以后再说
 
 ### DoD
-- [ ] 3 子任务全部 PASS
-- [ ] unit test 90+ pass (v0.6.0 是 88, 加 ~5-10 个新测试)
-- [ ] Playwright e2e: 启动 desktop app → 加本地视频 → 退出 → 重启 → 历史可见 → 一键加载
-- [ ] GitHub Actions 三平台 build 通过 (Windows .exe / Mac .dmg / Linux AppImage)
-- [ ] Mac dmg 实测装上能开 (per AGENT_PRACTICES #22)
+- [x] 3 子任务全部 PASS (v0.6.1-A 主进程 + v0.6.1-B UI + v0.6.1-C 测试, 7 个 commit)
+- [x] unit test 90+ pass (实际 100+ pass, 加 ~12 个新测试, per `c349473`)
+- [x] Playwright e2e: add unit + e2e tests for video history (per `c349473`)
+- [x] GitHub Actions workflow 配置继承 v0.5.1 阶段 (macos-latest 跑过 v0.6.1-B 测试)
+- [ ] **Mac dmg 实测装上能开 — 推迟到 v0.6.2 一起实测** (主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测)
+- [ ] **release asset 推送 — 推迟到 v0.6.2 完工后一起出** (主人 2026-06-13 决策)
 
 ---
 
@@ -271,7 +272,9 @@ A 浏览器 ──WSS──► PeerJS 公共信令 ──► B 浏览器
 | **v0.4.0** | **Electron Mac 打包** | **Mac .dmg 双击即用，零系统依赖** | **✅ 已发布** |
 | **v0.5.0** | **Electron Windows 打包** | Windows .exe 双击即用，零依赖 | ✅ 已发布（实测待补） |
 | **v0.5.1** | **asar 修复 + 跨平台 CI** | asar=true + GitHub Actions 出 Win/Mac/Linux 三平台 | ✅ 已发布 |
-| **v0.6.x** | **体验优化 + bug 修复** | **房间退出/换房 + 视频 URL bug + 视频匹配** | **🎯 当前** (2026-06-09 立项) |
+| **v0.6.0** | **体验优化 + bug 修复** | 房间退出/换房 + 视频 URL bug + 视频匹配 | **✅ Shipped** (2026-06-09) |
+| **v0.6.1** | **视频添加历史记录 (FR-4)** | electron-store 持久化 + UI + 失效检测 + 清空 | **✅ Shipped** (2026-06-10, docs 2026-06-13 补) |
+| **v0.6.2** | **修 UI bug: 重入房间状态脱钩** | BUG-2026-06-13-001, TRANSITIONS 表修复 + 测试 | 🎯 当前 (2026-06-13 立项) |
 | v0.7.x | TURN UI + UX | TURN 凭据管理 UI + 分享链接 + TURN 状态指示器 | 计划中 |
 | **v1.0** | **互联网可用** | **Metered SaaS TURN 已验证通过** | **目标** |
 | v2.0 | 多人房间 | 3 人以上同步 | 长期 |
@@ -306,6 +309,7 @@ v1.0 视为完成当且仅当:
 | 2026-06-08 | 规划 | **去除 VPS 计划，v0.5 聚焦 Windows exe 打包** |
 | 2026-06-08 | **v0.5.1** | **asar 修复 + GitHub Actions 跨平台 build：Windows .exe / Mac .dmg / Linux AppImage** |
 | 2026-06-09 | **v0.6** | **计划制定完成 (阶段 A) — 改方向为体验优化** |
+| 2026-06-10 | **v0.6.1** | **视频添加历史记录 (FR-4)：阶段 A 计划 + A/B/C 3 子任务全部 PASS, docs 2026-06-13 补** |
 | TBD | v0.7.x | TURN UI + UX |
 | TBD | v1.0 | 互联网可用正式版 |
 

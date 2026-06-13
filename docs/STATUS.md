@@ -3,14 +3,14 @@
 > **这是什么?** 项目的"进度快照"--当前版本、已完成、下一步。
 > **何时查阅?** 每次回来接任务时**先看这个**。
 > **关联文档:** [ROADMAP.md](./ROADMAP.md) · [CHANGELOG.md](./CHANGELOG.md) · [README.md](./README.md)
-> **最后更新：** 2026-06-08
+> **最后更新：** 2026-06-13
 
 ---
 
 ## 🚦 一句话状态
 
-**当前版本：v0.6.0 (Shipped 2026-06-09)** — 体验优化 + bug 修复: FR-1 房间退出 + 重新加入 / FR-2 修 URL 加载 bug / FR-3 解耦视频与房间 + 视频不匹配提示
-**下一目标：v0.7.x** — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
+**当前版本：v0.6.1 (Shipped 2026-06-10, docs 补齐 2026-06-13)** — 视频添加历史记录 (FR-4): electron-store 持久化 + 主进程 IPC 5 个 handler + 客户端 UI + 失效检测 + 单删/清空
+**下一目标：v0.6.2** — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); v0.6.1 + v0.6.2 合并出 release asset (远端先 debug, 主人实测通过后再 release)
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
@@ -54,6 +54,86 @@
 - ✅ GitHub Actions 跨平台 build 绿
 - ✅ 主人实测功能正常（创建/加入房间 + 视频同步）
 - ⚠️ macOS 用户需要手动 `xattr -d` 清 quarantine（临时）
+
+---
+
+## ✅ v0.6.1 已完成 (2026-06-10 完工, 2026-06-13 补 docs) — 视频添加历史记录 (FR-4)
+
+**Commits** (7 个, 全部 PASS):
+- `31ca692` plan(v0.6.1): 视频添加历史记录 计划 + 会议纪要
+- `19bd524` feat(v0.6.1-A): 主进程 + preload + electron-store 持久化 + 5 个 IPC handler
+- `0644ac8` test(v0.6.1-A): test report for main-process-preload-infra
+- `88f27b2` feat(v0.6.1-B): renderer UI — 视频选择对话框 "📜 历史" 按钮 + 列表 + 失效标灰
+- `e0fe399` fix(v0.6.1-B): 加"清空所有"按钮 + wire videoHistory.clear()
+- `c020d16` test(v0.6.1-B): test test for video-history-ui
+- `c349473` test(v0.6.1): add unit + e2e tests for video history
+
+**Tag**：`v0.6.1`（2026-06-13 补推, 详见 `git log origin/main..main` 验证）
+
+### 关键功能
+- 🆕 **FR-4 视频添加历史记录**:
+  - 持久化：`electron-store` 存 `app.getPath('userData')/video-history.json`
+  - 记录时机：`video.loadedmetadata` 事件触发写入
+  - 字段: 本地 `{type, path, name, size, mtime, addedAt}` / URL `{type, url, title, addedAt}`
+  - 历史 UI: 视频选择对话框加 "📜 历史" 按钮, 展开显示最近 20 条
+  - 一键重选: 本地 `loadVideo('file://'+path)` / URL `loadVideo(url, title)`
+  - 失效检测: 本地 `fs.existsSync` + 灰显 + "⚠️ 文件已移动/删除" 提示
+  - 单条删除 + "清空所有"（带确认）
+
+### IPC 接口
+- `desktopAPI.videoHistory.{get, add, remove, clear, checkExists}` — 跟现有 desktopAPI 命名一致
+
+### 测试
+- 单元测试：`npm test` 100+ pass (v0.6.0 是 88, 加 ~12 个新测试, per `c349473`)
+- v0.6.1-A Test Report: PASS（IPC handler 5 个全验 + electron-store 集成）
+- v0.6.1-B Test Report: PASS（UI 元素 + 集成 + 自定义 test-b-main.js + test-b-preload.js 跑过）
+- Playwright e2e：add unit + e2e tests for video history (per `c349473`)
+
+### 验收
+- ✅ 7 个 v0.6.1 commit 全部 PASS
+- ✅ 单元测试 + e2e 测试全绿
+- ⏳ GitHub Actions 跨平台 build 跑过 v0.6.1-B 测试用 macos-latest, 但 **未触发 release workflow**（主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测）
+- ⏳ Mac dmg 实测装上能开 — **推迟到 v0.6.2 一起实测**（同上）
+
+---
+
+## ✅ v0.6.1 已完成 (2026-06-10 完工, 2026-06-13 补 docs) — 视频添加历史记录 (FR-4)
+
+**Commits** (7 个, 全部 PASS):
+- `31ca692` plan(v0.6.1): 视频添加历史记录 计划 + 会议纪要
+- `19bd524` feat(v0.6.1-A): 主进程 + preload + electron-store 持久化 + 5 个 IPC handler
+- `0644ac8` test(v0.6.1-A): test report for main-process-preload-infra
+- `88f27b2` feat(v0.6.1-B): renderer UI — 视频选择对话框 "📜 历史" 按钮 + 列表 + 失效标灰
+- `e0fe399` fix(v0.6.1-B): 加"清空所有"按钮 + wire videoHistory.clear()
+- `c020d16` test(v0.6.1-B): add test report for video-history-ui
+- `c349473` test(v0.6.1): add unit + e2e tests for video history
+
+**Tag**：`v0.6.1`（2026-06-13 补推, 详见 `git log origin/main..main` 验证）
+
+### 关键功能
+- 🆕 **FR-4 视频添加历史记录**:
+  - 持久化：`electron-store` 存 `app.getPath('userData')/video-history.json`
+  - 记录时机：`video.loadedmetadata` 事件触发写入
+  - 字段: 本地 `{type, path, name, size, mtime, addedAt}` / URL `{type, url, title, addedAt}`
+  - 历史 UI: 视频选择对话框加 "📜 历史" 按钮, 展开显示最近 20 条
+  - 一键重选: 本地 `loadVideo('file://'+path)` / URL `loadVideo(url, title)`
+  - 失效检测: 本地 `fs.existsSync` + 灰显 + "⚠️ 文件已移动/删除" 提示
+  - 单条删除 + "清空所有"（带确认）
+
+### IPC 接口
+- `desktopAPI.videoHistory.{get, add, remove, clear, checkExists}` — 跟现有 desktopAPI 命名一致
+
+### 测试
+- 单元测试：`npm test` 100+ pass (v0.6.0 是 88, 加 ~12 个新测试, per `c349473`)
+- v0.6.1-A Test Report: PASS（IPC handler 5 个全验 + electron-store 集成）
+- v0.6.1-B Test Report: PASS（UI 元素 + 集成 + 自定义 test-b-main.js + test-b-preload.js 跑过）
+- Playwright e2e：add unit + e2e tests for video history (per `c349473`)
+
+### 验收
+- ✅ 7 个 v0.6.1 commit 全部 PASS
+- ✅ 单元测试 + e2e 测试全绿
+- ⏳ GitHub Actions 跨平台 build 跑过 v0.6.1-B 测试用 macos-latest, 但 **未触发 release workflow**（主人 2026-06-13 决策: v0.6.1 release 合并到 v0.6.2, 一起出 release asset, 一起实测）
+- ⏳ Mac dmg 实测装上能开 — **推迟到 v0.6.2 一起实测**（同上）
 
 ---
 
