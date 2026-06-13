@@ -638,6 +638,74 @@ E (auto, release 完后落实最终文档 — CHANGELOG 写真实 release 段)
 
 ---
 
+## 33. workspace 仓库远端 URL 写错 + token 反复 revoke + 没配 SSH key (3 层错叠, 教训:2026-06-13 22:35)
+
+### 情境
+
+**时间**：2026-06-13 22:35 (主人让我找 MyClaw 仓库 push 失败的根因)
+**触发**：
+1. 22:25 推 workspace MEMORY.md #31 commit 281d6d5 失败
+2. 22:30 推 workspace MEMORY.md #32 失败
+3. 22:35 主人: "之前就成功过, 为啥又失败, 之前也是失败又成功了, 找下失败经验"
+4. **查 4 个真相** (per #14 真实证据):
+   - `git ls-remote https://github.com/despicablemme/MyClaw.git` → **404 Not Found**
+   - `git ls-remote https://github.com/despicablemme/KnowledgeDatabase.git` → **200 OK** (HEAD=79f2f84, master branch)
+   - `git ls-remote git@github.com:despicablemme/KnowledgeDatabase.git` → **"Permission denied (publickey)"** (没配 SSH key)
+   - 主人 GitHub 有 22 个 public repos, **没** `MyClaw`, **有** `KnowledgeDatabase`
+
+### 根因 (3 层错叠)
+
+#### 错 1: workspace 远端 URL 写错
+- 本地 `.git/config` origin = `https://despicablemme:ghp_hO…X7Uw (省略中间, per AGENT_PRACTICES #5 教训)@github.com/despicablemme/MyClaw.git`
+- 远端 `despicablemme/MyClaw` 仓库**不存在** (public API 404)
+- **可能**: 主人 6月某天**改名** MyClaw → KnowledgeDatabase, **没**通知主 agent 更新本地 origin URL
+- **证据**: KnowledgeDatabase 远端 master HEAD = `79f2f84 backup: 2026-06-07 18:05:10`, **跟本地 9e89e16 backup: 2026-06-07 18:00:24 sha 不同** (本地比远端早 5 分钟, 主人手动 push 成功, 之后改名)
+
+#### 错 2: token 1 早被 revoke (AGENT_PRACTICES #5 旧伤)
+- token 1 = `ghp_hO…X7Uw (省略中间, per AGENT_PRACTICES #5 教训)` (跟 .git/config 一致)
+- 2026-05-16 echo $TOKEN 进 transcript → 被 revoke
+- 2026-06-08 主人给 token 2 (`ghp_FG…6otn`), 我 `T='ghp_FG…6otn'` 进 transcript → 被 revoke
+- 2026-06-09 `security find-internet-password -s "github.com" -g` 暴露 token 完整明文进 transcript → token 2 也被 revoke
+- **主 agent 失职链** (per #11 教训): 主人给 token → 我**没主动**持久化 (Keychain / .zshrc / .netrc / SSH key) → 之后 token 反复失效
+
+#### 错 3: workspace 仓库没配 SSH key (永久方案没实施)
+- 2026-06-09 主人说升级 SSH key 方案 (per #11 末尾), **但** 只 syncplay 仓库升级了, **workspace 仓库没动**
+- 当前 SSH 状态: `git ls-remote git@github.com:despicablemme/KnowledgeDatabase.git` → "Permission denied (publickey)"
+- 永久方案 = SSH key (per #11 表格"最推荐"), 不用 token 反复失效问题
+
+### 主 agent 失误链 (5 个)
+
+1. ❌ **没**真 verify workspace 远端存在 (per #30 必 verify env, 之前没做)
+2. ❌ **没**查 workspace 实际是哪个仓库 (owner despicablemme 下 22 个 public repos, 找跟本地内容相似的)
+3. ❌ **没**升级 workspace token (per #11 教训, 主 agent 必主动持久化)
+4. ❌ **没**配 SSH key (per #11 推荐永久方案)
+5. ❌ **没**fetch verify push 成功 (per #15 教训, 之前没看到, v0.6.2 失误后才强化)
+
+### 加固 (避免下次再踩)
+
+| 规则 | 说明 |
+|---|---|
+| ✅ **派 subagent / commit 之前必 verify env** (per #30 扩展) | 1. `git remote -v` 看 origin URL 是否真存在<br>2. `git ls-remote <url>` 试 fetch (public API 验证)<br>3. `security find-internet-password -s github.com -w` 探 Keychain token (10s 超时检查)<br>4. `ssh -T git@github.com` 试 SSH key<br>5. 缺啥主 agent 自己装 / 找 fallback, **不**问主人 (per v3) |
+| ✅ **workspace 仓库必**配 SSH key (永久, per #11 推荐) | `ssh-keygen -t ed25519 -C "jarvis@openclaw" -f ~/.ssh/openclaw_github`<br>`pbcopy < ~/.ssh/openclaw_github.pub` → 主人推到 GitHub Settings > SSH and GPG keys<br>然后 `git remote set-url origin git@github.com:despicablemme/KnowledgeDatabase.git` |
+| ✅ **token 只**走 `/tmp/.gh_token` (chmod 600) 或 Keychain (per #5/#11) | **绝不** echo 进 transcript<br>**绝不** 写进 `T='ghp_...'` subagent prompt<br>**绝不** 写进 `git commit message` 或文档 |
+| ✅ **推 tag / 改 origin URL / commit 之前必**真 verify push 成功 (per #15 教训) | `git push origin main` 后**立刻** `git fetch origin main` + `git rev-parse main origin/main` 必一致 |
+| ✅ **远端**改名/删/转 private 时**立刻**更新本地 origin URL | 主人**任何**仓库改动 (rename / visibility / delete) 必告诉主 agent, 主 agent **立刻** 跑 `git remote set-url origin <new-url>` |
+| ❌ **不** 写 token 进 `.git/config` 明文 (per #5) | 用 `git credential-osxkeychain store` 配 Keychain, **不**写明文 URL |
+| ❌ **不**信"之前 push 成功过" 就不 verify (per #15) | 每次 push **必** fetch 验证, 主人说"之前成过" 也不**例外** |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` — v3 修订阶段 B 顶部 + 阶段 D + 阶段 E, **需**加 "verify env before commit" 段
+- `~/.openclaw/workspace/MEMORY.md` #33 — 同内容精简版
+- AGENT_PRACTICES #5 (token 明文打印) + #6 (漏查 Keychain) + #11 (导出 token 配错) + #30 (verify env before ACP) + #31 (v3) + #32 (v4) + #33 (本条)
+- MEMORY #11/#14/#30/#31/#32
+
+---
+
+
+
+---
+
 
 
 ---
