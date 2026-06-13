@@ -536,6 +536,112 @@
 
 ---
 
+## 32. v0.6.x 工作流修订 v4 — C 先出 debug build, 主人验收通过才出 release, 阶段 E 落实最终文档 (教训:2026-06-13 22:25)
+
+### 情境
+
+**时间**：2026-06-13 22:25 (主人在 v3 落地后 5 分钟, 问 "有没有在工作流中强调 C 阶段要先出 debug build, debug build 验收通过前不可以出 release 版本, 主人验收通过后才可以最终出 release 发布, 最后落实全部文档")
+**触发**:
+1. 主人 22:20 让我 v3 (A 完 → 全自动 B → C → D debug build 出)
+2. 主 agent v3 落地 commit d72e3cd (runbook.md 阶段 B/C/D 改)
+3. 主人 22:25 强调 v3 缺关键约束: **debug build 验收通过**才**可**出 release, **不**是 debug build 跑通就出 release
+4. **v3 失误**: 把 debug build 当 v3 自动链终止点, **没**强调"主人验收通过"这个**强**约束, **没**明确的"release 触发"段, **没**明确的"release 后落实最终文档"段
+
+### 修订内容 (v3 → v4)
+
+| 维度 | v3 (2026-06-13 22:20) | v4 (2026-06-13 22:25) |
+|---|---|---|
+| 阶段 C 范围 | 升 version + 4 docs + 自己 trigger debug build | 升 version + 落实**临时**文档 (不写 release 段) + 自己 trigger debug build |
+| 阶段 C 完通知 | 通知主人 "debug build 跑通, 装上跑实测" | **同 v3** + 强调 "**主 agent 推 tag 触发 release 前**必须**主人验收通过**" |
+| 阶段 D 范围 | (新) Debug Build Trigger | **改名/重定位** Release Build Trigger (推 tag + push event 触发 release workflow) |
+| Debug → Release 硬性顺序 | **没**明确 (v3 缺) | ✅ **debug 验收通过**才进 D 推 tag, **否则**走 NEED FIX |
+| Release 后落实文档 | **没**明确 (v3 缺) | ✅ 阶段 E: 最终文档落实 (CHANGELOG 写 release 段, 加真实 release 时间/链接/assets) |
+| 通知主人次数 | 1 次 (debug 出) | 2 次 (debug 出 + release 完) |
+
+### 关键执行规则 (v4 必修)
+
+1. **阶段 C = debug build 触发** (auto, 主 agent verify env + 自己 trigger, 跟 v3 一样)
+2. **debug build 完 → 通知主人验收** (v3 终止点保留)
+3. **主人验收通过** → 主 agent 推 tag 触发 release workflow (新阶段 D)
+4. **主人验收未通过** → 走 NEED FIX 流程, **不**出 release, 派新 Builder 修, 重 trigger debug
+5. **release 完** → 阶段 E 落实最终文档 (CHANGELOG 写 release 段, 加真实 release 时间/链接/assets)
+6. **阶段 E 完** → 通知主人 release 完成 (v4 终止点 2)
+7. **release 失败 3 次** → 通知主人拍方向
+
+### 关键决策: 何时通知主人 (v4)
+
+| 场景 | 通知? | 理由 |
+|---|---|---|
+| **debug build 跑通** | ✅ **通知** (v4 终止点 1) | 主人实测验收 |
+| **debug build 验收未通过** | ❌ 自动 NEED FIX, 不通知 (除非 3 次 FAIL) | 主 agent 自己修 |
+| **release workflow 跑通** | ✅ **通知** (v4 终止点 2) | release 完成 |
+| **release 失败 3 次** | ✅ **通知** | 主人拍方向 |
+| **NEED FIX/FAIL** (per #10 失败超过 3 次) | ✅ **通知** | 拍修复方向 |
+| **主 agent 评估需要 trade-off** (per #29) | ✅ **通知** | trade-off 决策需主人 |
+| **方向缺失** (per #28/#29) | ✅ **通知** | 主人拍方向 |
+
+### 阶段流程 (v4 完整)
+
+```
+A (auto, 主人 + Jarvis 经 Claude 确认方案 + 写 MEETINGS)
+  ↓
+B (auto, 子任务实施 + 验收 + commit + push)
+  ↓
+C (auto, 升 version + 落实临时文档 + 自己 trigger debug build)
+  ↓
+[终止点 1: debug build 跑通 → 通知主人验收]
+  ↓
+主人验收
+  ├─ 通过 → 推 tag (auto, 阶段 D)
+  └─ 未通过 → NEED FIX (auto, 派新 Builder 修, 重 trigger debug, 不出 release)
+  ↓
+D (auto, 推 tag + push event 触发 release workflow)
+  ↓
+E (auto, release 完后落实最终文档 — CHANGELOG 写真实 release 段)
+  ↓
+[终止点 2: release 完 → 通知主人]
+```
+
+### 跟之前差异 (v3 → v4)
+
+| 维度 | v3 | v4 |
+|---|---|---|
+| **debug → release 硬性顺序** | **没**明确 | ✅ debug 验收通过才推 tag |
+| 阶段 C 文档 | 写 "vX release 段" (CHANGELOG) | 写 "vX 已通过 debug 实测" 临时标记, 阶段 E 才升级 |
+| 阶段 D 范围 | Debug Build Trigger | Release Build Trigger (推 tag 触发 release) |
+| 阶段 E (新) | **没** | 最终文档落实 (release 段 + 真实时间/链接/assets) |
+| 通知主人次数 | 1 (debug 出) | 2 (debug 出 + release 完) |
+
+### 反思 (v0.6.2 实战 + v3/v4 修订)
+
+1. **v0.6.2 阶段 C 失误**: 推 v0.6.2 tag 自动触发了 release workflow, 跳过了 debug 验证. 主人 22:10 纠正.
+2. **v3 阶段 D 失误**: 把 debug build trigger 当 v3 自动链终止点, **没**强调"主人验收通过" + **没**"release 触发" + **没**"release 后文档". 主人 22:25 立刻纠正.
+3. **v4 完善**: 加 3 段 (debug 验收硬约束 + 推 tag 触发 release + 阶段 E 最终文档)
+
+### 加固 (避免下次再踩)
+
+| 规则 | 说明 |
+|---|---|
+| ✅ **debug build 验收通过**才推 tag | v4 硬性顺序约束, 写进 runbook + AGENT_PRACTICES |
+| ✅ **阶段 C 文档不写 release 段** | "vX 已通过 debug 实测" 临时标记, 阶段 E 才升级 |
+| ✅ **阶段 E 是 release 后立刻落实** | CHANGELOG 写 release 段 + STATUS/ROADMAP 升 v<X+1> 立项 |
+| ✅ **主 agent 不自动推 tag** | 等主人验收通过才推 |
+| ❌ **不**在 debug 验收**未**通过时推 tag | 走 NEED FIX, 不出 release |
+| ❌ **不**在阶段 C 写 release 章节 | 阶段 E 才写, 防止 release 之前承诺 |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` — 阶段 C 顶部 v4 + 阶段 D "Release Build Trigger" v4 + 新阶段 E "最终文档落实" v4
+- `~/.openclaw/workspace/MEMORY.md` #32 — 同内容精简版
+- AGENT_PRACTICES #30 (verify env) + #31 (v3) + #32 (本条 v4)
+- MEMORY #10/#28/#29/#30/#31
+
+---
+
+
+
+---
+
 *维护：Jarvis*
 *协作：主人（Bruce）*
 

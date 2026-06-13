@@ -3,7 +3,7 @@
 > **这是什么？** 主 agent (Jarvis) 接到主人任何目标（v0.6 / v0.7 / 新功能 / bug fix / 架构调整）后的**通用 3 阶段流程**。
 > **何时使用？** 主人说"下一个目标 = X" 之后, 主 agent **第一件事**就是读本文件, 然后照着跑。
 > **适用范围：** **所有目标** (不是某个版本专属)。
-> **最后更新：** 2026-06-13 (v3 工作流修订: 阶段 A 完 → 全自动 B → C → D debug build 出, 主人 2026-06-13 22:20 决策)
+> **最后更新：** 2026-06-13 22:25 (v4 工作流修订: C 先出 debug build → 主人验收 → D 推 tag 触发 release → E 落实最终文档)
 
 ---
 
@@ -518,14 +518,60 @@ await sessions_yield();  // 等完工事件
 
 ---
 
-## 🎯 阶段 D: Debug Build Trigger — 主 agent 详细动作 [v3, 2026-06-13 22:20 新增]
+## 🎯 阶段 D: Release Build Trigger — 主 agent 详细动作 [v4, 2026-06-13 22:25 修订]
 
-> **v3 核心**: 阶段 C 完**直接**进 D, debug build 出来才停. 跟 v0.6.2 之前"卡住问主人 trigger 方案"失误 (per AGENT_PRACTICES #31) 决裂.
+> **v4 核心**: debug build 出 + 主人验收**通过** → 主 agent 推 git tag 触发 release workflow (push event, auto). debug 验收**未**通过 → **不**触发 release, 走 NEED FIX 流程. 跟 v3 "Debug Build Trigger" 拆出独立段, 整合到阶段 C.
 
-### 触发条件
+### 触发条件 (硬性)
 
-- 阶段 C 全部完 (4 docs 更新 + 2 package.json 升版 + git tag 推)
-- **不**等主人确认, **不**问主人 "debug 怎么 trigger" (v3 主 agent **必须**自己 trigger)
+- **阶段 C 完** + **主人验收 debug build 通过** (v4 主 agent 不**只**看 build 跑通, **还**要等主人实测 OK)
+- **debug build 验收未通过** → **不**进 D, 走 NEED FIX 流程 (派新 Builder 修, 重 trigger debug, 不出 release)
+- 主 agent **不**自动推 tag (v0.6.2 失误复盘: 推 tag 自动触发 release, 没经过 debug 验收)
+
+### 主 agent 责任 (v4)
+
+1. **等主人验收通过** (debug build 已出, 主人实测 .dmg 装上跑, 主人回复 "通过" / "FAIL")
+2. **debug 通过** → 立刻推 git tag 触发 release workflow:
+   ```bash
+   cd ~/CodeProjects/syncplay
+   git tag -a v<X.Y.Z> -m "v<X.Y.Z>: <一句话目标> — Release"
+   git push origin v<X.Y.Z>
+   # push tag 触发 .github/workflows/build.yml 的 push event
+   ```
+3. **verify tag push** (per #15 教训, fetch 验证):
+   ```bash
+   git fetch origin v<X.Y.Z>
+   git rev-parse v<X.Y.Z>  # 跟 origin/v<X.Y.Z> 一致
+   ```
+4. **等 release workflow 跑通** (5-10 分钟 per 平台)
+5. **verify release 完成** (per #6 public API 不需 token):
+   ```bash
+   curl -sS "https://api.github.com/repos/despicablemme/SyncPlayer/releases/tags/v<X.Y.Z>" | ...
+   ```
+6. **release 完** → 通知主人 + 立刻进阶段 E (落实最终文档)
+7. **release FAIL** → 主 agent 看 GitHub Actions log 找原因, 自动修 (build.yml 错 / sign 错), 重 push tag (触发新 build), **不**问主人
+8. **3 次 release 都 FAIL** → 通知主人拍方向
+
+### 不做什么 (v4)
+
+- ❌ **不**在 debug build 验收**未**通过时推 tag (v0.6.2 失误复盘)
+- ❌ **不**自动 trigger release workflow (等主人 OK)
+- ❌ **不**在 release 失败时盲目重试 (3 次后通知主人)
+- ❌ **不**写 CHANGELOG "release" 段 (阶段 E 才写, per v4 流程)
+
+### 主人介入点 (v4)
+
+- **debug build 完** → 主人实测 (阶段 C 自动链终止点)
+- **主人验收通过** → 主 agent 推 tag (自动)
+- **3 次 release 都 FAIL** → 主人拍方向
+- **debug 验收未通过** → 走 NEED FIX (派新 Builder 修, 不出 release)
+
+### 耗时
+
+- 主人实测 debug build: 5-15 分钟 (装 + 跑 + 验证)
+- 推 tag 触发 release: 1-2 分钟
+- release workflow 跑通: 5-10 分钟
+- 总: 11-27 分钟 (主 agent 跑的部分 < 3 分钟, 主要是 release build 时间)
 
 ### 主 agent 责任 (v3 必修)
 
@@ -634,13 +680,82 @@ await sessions_yield();  // 等完工事件
 
 ---
 
-## 🎯 阶段 C: 完工 (更新 docs) — 主 agent 详细动作 [v3, 2026-06-13 22:20 修订]
+## 🎯 阶段 E: 最终文档落实 — 主 agent 详细动作 [v4, 2026-06-13 22:25 新增]
+
+> **v4 核心**: release 完后, 主 agent 落实**最终**文档 (CHANGELOG 写真实 release 段, 加 release 时间/链接/assets). 跟阶段 C 的"临时文档"区分: 阶段 C 写"vX 已通过 debug 实测", 阶段 E 写"vX release published YYYY-MM-DD, 链接, 3 assets".
+
+### 触发条件
+
+- 阶段 D release workflow 跑通 (verified via public API)
+- **不**等主人确认 (auto, per v4 自动链)
+
+### 主 agent 责任 (v4)
+
+1. **fetch release 真实数据** (per #6 public API 不需 token):
+   ```bash
+   curl -sS "https://api.github.com/repos/despicablemme/SyncPlayer/releases/tags/v<X.Y.Z>" \
+     -H "Accept: application/vnd.github+json" > /tmp/release.json
+   # 解析: tag_name, published_at, html_url, assets[].{name, size, browser_download_url}
+   ```
+2. **更新 CHANGELOG.md "vX 已通过 debug 实测" 段** → 改 "vX release 段":
+   - 加 `**Released**: YYYY-MM-DD` (用 published_at 日期)
+   - 加 `**Release page**: https://github.com/despicablemme/SyncPlayer/releases/tag/v<X.Y.Z>`
+   - 加 `**Assets (N)**:`
+     - `SyncPlay-<X.Y.Z>-arm64.dmg (96 MB) — Mac`
+     - `SyncPlay-<X.Y.Z>.Setup.exe (80 MB) — Windows`
+     - `SyncPlay-<X.Y.Z>.AppImage (104 MB) — Linux`
+3. **更新 STATUS.md** "下一目标" 段: vX 已 release, 下一目标 v<X+1> 立项
+4. **更新 ROADMAP.md** "当前迭代" 段: vX release 完成, v<X+1> 立项待拍
+5. **更新 MEETINGS.md** 加 #011 vX release 完工纪要 (主人 22:25 v4 决策 + 阶段 A/B/C/D/E 全过程)
+6. **commit + push** "docs(vX): release status update + final docs"
+7. **通知主人** "✅ vX release 已发布, 链接, 3 assets 可下载" (v4 自动链终止点 2)
+
+### 不做什么 (v4)
+
+- ❌ **不**在阶段 C 写 release 段 (CHANGELOG "vX 已通过 debug 实测" 是临时标记, 阶段 E 才升级为 release 段)
+- ❌ **不**写 v<X+1> 阶段 (v<X+1> 是新目标, 走 v2 工作流从 A 开始, 阶段 E 不涉及)
+- ❌ **不**trigger release workflow (阶段 D 才 trigger, 阶段 E 是 release 完后文档)
+
+### 主人介入点 (v4)
+
+- **release 完 + 阶段 E 文档 commit + push 完** → 通知主人 (v4 终止点)
+- **v<X+1> 立项** → 主人定方向 (v2 工作流 A 阶段)
+
+### 耗时
+
+- fetch release 真实数据: 5 秒
+- 4 docs 更新: 5-10 分钟
+- commit + push: 1-2 分钟
+- 总: ~15 分钟
+
+---
+
+## 🎯 阶段 C: 完工 (更新 docs) — 主 agent 详细动作 [v4, 2026-06-13 22:25 修订]
+---
+
+## 🎯 阶段 C: 完工 (更新 docs) — 主 agent 详细动作 [v4, 2026-06-13 22:25 修订]
 
 ### 什么时候进
 
 - **全部 N 个子任务 PASS 后** (per B 阶段自动链)
 - **不**在某个子任务 PASS 时就更新 docs (那是"进度中转", 不是"完工")
-- **v3**: 阶段 C 完**不**通知主人, **直接**进阶段 D (debug build trigger), debug 出才通知
+- **v4 核心约束** (主人 2026-06-13 22:25 强调):
+  1. **阶段 C 先出 debug build** (auto, 主 agent 必 verify env + 自己 trigger)
+  2. **debug build 验收通过前不可以出 release 版本** (硬性顺序约束)
+  3. **主人验收通过后才可以最终出 release 发布** (主 agent 推 tag 触发 release)
+  4. **最后落实全部文档** (release 完后 CHANGELOG 写真实 release 段, 不在阶段 C 写)
+- **v3 → v4 流程**: C 出 debug build → 通知主人验收 → 主人通过 → D 推 tag 触发 release → E 落实文档 → 通知主人
+
+### 阶段 C 范围 (v4)
+
+- ✅ 升 version (package.json, 根 + desktop/)
+- ✅ 落实**临时**文档 (STATUS/ROADMAP/CHANGELOG 加 vX "已通过 debug 实测" 段 — **不**写 release 章节)
+- ✅ **自己 trigger workflow_dispatch debug build** (verify env per #30 + gh/curl/OpenClaw 3 方案)
+- ✅ debug build 跑通后 → 通知主人验收 (v4 自动链终止点 1)
+- ❌ **不**出 release 版本 (debug 未通过**不**推 tag, 不触发 release workflow)
+- ❌ **不**写 CHANGELOG "release" 段 (阶段 E 才写)
+
+### 阶段 C 流程 (跟 v3 一样, **不**变)
 
 ### 做什么
 
@@ -773,4 +888,4 @@ git rev-parse main origin/main
 ---
 
 *制定：Jarvis & 主人*
-*最后更新：2026-06-13 (v3 工作流修订: A 完 → 全自动 B/C/D debug build 出, 主人 2026-06-13 22:20 决策)*
+*最后更新：2026-06-13 22:25 (v4 工作流修订: 阶段 C 先出 debug build, 主人验收通过后才出 release, 阶段 E 落实最终文档)*
