@@ -129,6 +129,7 @@
 - `0d4f922` fix(v0.6.2-A): 放宽 TRANSITIONS + 改测试 + exitRoom 清 myVideoInfo
 - `4000465` feat(v0.6.2-B): peer.on('open') 改走 recomputeRoomState + unbindVideoEvents + Mac arm64 debug workflow
 - `<v0.6.2-stage-c>` docs(v0.6.2): release status update + version bump (本 commit)
+- `<v0.6.2-stage-e>` docs(v0.6.2): release status update + final docs (阶段 E 最终文档, 本 commit)
 
 **测试**:
 - 单元测试：`npm test` **112/112 PASS** (v0.6.1 是 110, 加 2 个 unbindVideoEvents 测例)
@@ -142,17 +143,24 @@
 - ✅ 单元测试 112/112 PASS
 - ✅ YAML 语法 OK
 - ✅ 全角标点未坏 (3 文件改前 = 改后, 差 = 0)
-- ⏳ **release asset 推迟**: 主人 2026-06-13 决策: v0.6.1 + v0.6.2 合并出 release (主人实测 v0.6.2 Mac arm64 debug build 通过后跑)
+- ✅ **Released**: 2026-06-13 (push tag 自动触发 release, v0.6.2 阶段 C 失误链: 没经过 debug 验收直接出 release, per AGENT_PRACTICES #32 v4 修订反思)
+
+**✅ Released** (2026-06-13)
+- **Release page**: https://github.com/despicablemme/SyncPlayer/releases/tag/v0.6.2
+- **Assets (3)**:
+  - 🍎 macOS: [SyncPlay-0.6.2-arm64.dmg](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2-arm64.dmg) (96 MB)
+  - 🐧 Linux: [SyncPlay-0.6.2.AppImage](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2.AppImage) (104 MB)
+  - 🪟 Windows: [SyncPlay.Setup.0.6.2.exe](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay.Setup.0.6.2.exe) (80 MB)
 
 **文档**:
-- `docs/STATUS.md` 加 v0.6.2 已完成段 (本收尾)
-- `docs/ROADMAP.md` v0.6.2 状态改 ✅ Shipped + 加 v0.7 段 (本收尾)
-- `docs/CHANGELOG.md` 加本段 (本收尾)
-- `docs/MEETINGS.md` 加 #010 v0.6.2 完工纪要 (本收尾)
+- `docs/STATUS.md` 加 v0.6.2 已完成段 (阶段 C) + 加 ✅ Released 段 (阶段 E, 本收尾)
+- `docs/ROADMAP.md` v0.6.2 状态改 ✅ Shipped + 加 v0.7 段 (阶段 C) + 加 ✅ Released 段 (阶段 E, 本收尾)
+- `docs/CHANGELOG.md` 加本段 (阶段 C) + 加 ✅ Released 段 (阶段 E, 本收尾)
+- `docs/MEETINGS.md` 加 #010 v0.6.2 阶段 C 完工纪要 + #011 v0.6.2 release 完工纪要 (本收尾, 阶段 E)
 
 **A6 文档**: `.agent-tasks/v0.6.2/v0.6.2-execution-plan.md` (不上库, 主 agent 接手 per #10)
 
-详见 [MEETINGS.md 会议 #009 阶段 A 计划](./MEETINGS.md) + #010 完工纪要 + [REQUIREMENTS.md BUG-2026-06-13-001](./REQUIREMENTS.md)
+详见 [MEETINGS.md 会议 #009 阶段 A 计划](./MEETINGS.md) + #010 阶段 C 完工纪要 + #011 阶段 E release 完工纪要 (本收尾) + [REQUIREMENTS.md BUG-2026-06-13-001](./REQUIREMENTS.md)
 
 ---
 

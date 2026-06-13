@@ -172,7 +172,15 @@
 - ✅ release 3 job (build-windows/mac/linux) 完全未动
 - ✅ 远端 Mac arm64 debug build workflow_dispatch 入口可用
 - ⏳ Mac dmg 实测装上能开 — 主人手动触发 workflow_dispatch 跑 (per 主人 2026-06-13 决策)
-- ⏳ v0.6.1 + v0.6.2 合并 release asset — 主人实测通过后跑
+- ✅ **Released**: 2026-06-13 (push tag 自动触发, 阶段 C 失误链反思 per AGENT_PRACTICES #32 v4 修订)
+- ⏳ v0.6.1 + v0.6.2 合并 release asset — 主人实测通过后跑 (debug vs release 代码 100% 一样, 主人可直接装现有 .dmg 实测, per #22 跑 xattr)
+
+**✅ Released** (2026-06-13):
+- **Release page**: https://github.com/despicablemme/SyncPlayer/releases/tag/v0.6.2
+- **Assets (3)**:
+  - 🍎 macOS: [SyncPlay-0.6.2-arm64.dmg](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2-arm64.dmg) (96 MB)
+  - 🐧 Linux: [SyncPlay-0.6.2.AppImage](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2.AppImage) (104 MB)
+  - 🪟 Windows: [SyncPlay.Setup.0.6.2.exe](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay.Setup.0.6.2.exe) (80 MB)
 
 ---
 

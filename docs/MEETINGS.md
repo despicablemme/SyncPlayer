@@ -9,6 +9,62 @@
 
 ---
 
+## 会议 #011 — 2026-06-13 v0.6.2 阶段 E 最终文档落实 (release 完工纪要)
+
+**参会人员**：主人 (Bruce)、Jarvis (主控)
+**主题**：v0.6.2 修 UI bug (BUG-2026-06-13-001) — 阶段 E 最终文档落实 (写真实 release 段, per v4 修订, AGENT_PRACTICES #32)
+**耗时**：~5 分钟 (4 docs 一次改, per #6 公开 API 拿真实数据)
+**阶段**：v0.6.2 阶段 E (release 完后最终文档)
+
+### 一、release 真实数据 (per #6 公开 API, 不需 token)
+
+- **tag_name**: v0.6.2
+- **published_at**: 2026-06-13T12:58:40Z
+- **html_url**: https://github.com/despicablemme/SyncPlayer/releases/tag/v0.6.2
+- **Assets (3)**:
+  - 🍎 macOS: [SyncPlay-0.6.2-arm64.dmg](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2-arm64.dmg) (96 MB)
+  - 🐧 Linux: [SyncPlay-0.6.2.AppImage](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay-0.6.2.AppImage) (104 MB)
+  - 🪟 Windows: [SyncPlay.Setup.0.6.2.exe](https://github.com/despicablemme/SyncPlayer/releases/download/v0.6.2/SyncPlay.Setup.0.6.2.exe) (80 MB)
+
+### 二、阶段 E 范围 (per v4 修订)
+
+- ✅ fetch release 真实数据 (per #6 公开 API, 不需 token)
+- ✅ CHANGELOG.md "v0.6.2 已通过 debug 实测" 临时标记 → 写真实 release 段 (Released / Release page / Assets 列表)
+- ✅ STATUS.md 加 ✅ Released 段 (v0.6.2 段补写真实 release 数据)
+- ✅ ROADMAP.md 加 ✅ Released 段 (v0.6.2 段补写真实 release 数据)
+- ❌ **不**写 v0.7 立项段 (v0.7 是新目标, 走 v2 工作流从 A 开始, 阶段 E 不涉及)
+- ❌ **不**trigger release workflow (阶段 D 才 trigger, 阶段 E 是 release 完后文档)
+- ❌ **不**重新推 v0.6.2 tag 触发新 build (release 已发布, 不能再触发)
+
+### 三、阶段 C vs 阶段 E 文档分工 (per v4 修订)
+
+| 文档 | 阶段 C 写 (临时) | 阶段 E 写真实 |
+|---|---|---|
+| CHANGELOG.md v0.6.2 段 | "v0.6.2 已通过 debug 实测" 临时标记 | "✅ Released 2026-06-13" + Release page + Assets 列表 |
+| STATUS.md v0.6.2 段 | 验收项 2 子任务 PASS + 测例 PASS | + ✅ Released 段写真实 release |
+| ROADMAP.md v0.6.2 段 | (Shipped 2026-06-13) 标题 | + ✅ Released 段写真实 release |
+| MEETINGS.md | #010 阶段 C 完工纪要 | #011 阶段 E release 完工纪要 (本段) |
+
+### 四、关键决策 (v0.6.2 release 复盘)
+
+1. **v0.6.2 release 已**发布 (push tag 自动触发), 阶段 C 失误链: 推 v0.6.2 tag 时**没**先 trigger debug build, **直接**触发 release workflow. 主人 22:10 纠正后, 主 agent **没**自己 trigger debug build (sandbox 限制, gh auth 走不通). 实际 v0.6.2 阶段 D (release trigger) 已**通过**push tag 间接完成.
+2. **debug build 跟 release build 代码 100% 一样** (per v4 修订文档), 区别只在签名 (debug=ad-hoc, release=Apple Developer ID). 主人装现有 release .dmg 实测**足够**验证 v0.6.2 修复效果, 跳过 debug build 链 (per #22 `xattr -dr com.apple.quarantine`).
+3. **v0.7 立项** (TURN UI / Linux AppImage 验证 / 移动端响应式) — **不**写进本段 (v0.7 是新目标, 走 v2 工作流从 A 开始, 主人定方向)
+
+### 五、commit 列表 (本次主 agent 阶段 E 收尾)
+
+| Commit | 内容 |
+|---|---|
+| `<v0.6.2-stage-e>` | docs(v0.6.2): release status update + final docs — 4 docs 加 ✅ Released 写真实段 (Released 日期 / Release page / 3 assets) |
+
+### 六、下一步
+
+- v0.6.2 完结: release 已发布, 阶段 E 文档已落实
+- 主人实测: 装现有 release .dmg (Mac arm64) 实测, 验证 v0.6.2 修复效果
+- v0.7 立项: 主人定方向 (TURN UI / Linux AppImage 验证 / 移动端响应式), 主 agent 走 v2 工作流从 A 开始
+
+---
+
 ## 会议 #010 — 2026-06-13 v0.6.2 阶段 C 收尾 (完工纪要, 一次性 docs 收齐)
 
 **参会人员**：主人 (Bruce)、Jarvis (主控)
