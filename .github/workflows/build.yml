@@ -7,6 +7,14 @@ on:
         description: 'Version (e.g. 0.5.0)'
         required: false
         type: string
+      build_type:
+        description: 'Build type (debug | release)'
+        required: false
+        type: choice
+        default: 'release'
+        options:
+          - debug
+          - release
 
   push:
     tags:
@@ -106,6 +114,40 @@ jobs:
           name: SyncPlay-Linux-AppImage
           path: desktop/dist/*.AppImage
           retention-days: 30
+
+  # v0.6.2: Mac arm64 debug build 入口 (主人实测用, 不触发 release)
+  # 跟 release job (build-windows / build-mac / build-linux) 互不影响
+  build-mac-debug:
+    if: github.event.inputs.build_type == 'debug' && startsWith(github.ref, 'refs/heads/main')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'desktop/package-lock.json'
+
+      - name: Install
+        run: cd desktop && npm ci
+
+      - name: Prebuild
+        run: cd desktop && npm run prebuild
+
+      - name: Build Mac (debug, no sign)
+        env:
+          DEBUG: 'electron-builder'
+          # 不传 CSC_LINK / CSC_KEY_PASSWORD → ad-hoc 签名 (同 v0.5.1)
+        run: cd desktop && npx electron-builder --mac --arm64 --config.mac.identity=null
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: syncplay-mac-arm64-debug
+          path: desktop/dist/*.dmg
+          if-no-files-found: error
+          retention-days: 7
 
   verify:
     if: >-

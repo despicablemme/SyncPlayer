@@ -262,7 +262,13 @@
 
       this.peer.on('open', (id) => {
         console.log('[peer] open', id);
-        updateLocalStatus('等待对方加入...', 'waiting');
+        // v0.6.2 fix: 走状态机, 触发 listener 同步 UI (避免直接 updateLocalStatus 绕过状态机)
+        if (typeof recomputeRoomState === 'function') {
+          recomputeRoomState();
+        } else {
+          // 防御性: recomputeRoomState 不可用时 fallback
+          updateLocalStatus('等待对方加入...', 'waiting');
+        }
 
         if (!this.isInitiator) {
           this.connectToPeer();
@@ -674,6 +680,8 @@
 
   function exitRoom() {
     if (!connMgr) return;
+    // v0.6.2 fix: 退出房间前先解绑 video 事件监听, 防反复进房时 listener 累积
+    if (connMgr.engine) connMgr.engine.unbindVideoEvents();
     connMgr.destroy();
     connMgr = null;
     // FR-3: 清空对端 video_info, 切回 no_room, 触发 listener 重置 UI + 停 engine
@@ -688,7 +696,11 @@
 
   // FR-3 关键改动: 删掉 ensureVideoReady() 调用 — 视频不再是房间前提
   function startSession(isInitiator, targetRoomId) {
-    if (connMgr) connMgr.destroy();
+    if (connMgr) {
+      // v0.6.2 fix: 重新进房前先解绑旧 video 事件监听, 防 listener 累积
+      if (connMgr.engine) connMgr.engine.unbindVideoEvents();
+      connMgr.destroy();
+    }
 
     connMgr = new ConnectionManager();
     connMgr.init(isInitiator, targetRoomId, video);

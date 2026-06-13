@@ -373,6 +373,47 @@ describe('SyncEngine video event binding', () => {
     video._emit('play');
     assert.strictEqual(send.calls.length, 0, 'guardUntil 期内 play 事件不上报');
   });
+
+  test('unbindVideoEvents 解绑后视频事件不上报 (幂等)', () => {
+    const video = createMockVideo({ currentTime: 10, duration: 100 });
+    const send = createMockSend();
+    const engine = makeEngine(video, send);
+
+    // 解绑前: 触发 play 应该 send
+    send.clear();
+    video._emit('play');
+    assert.strictEqual(send.calls.length, 1, '解绑前 play 事件应 send');
+
+    // 解绑
+    engine.unbindVideoEvents();
+    send.clear();
+
+    // 解绑后: 触发 play/pause/seeked 都不应 send
+    video._emit('play');
+    video._emit('pause');
+    video._emit('seeked');
+    assert.strictEqual(send.calls.length, 0, '解绑后 play/pause/seeked 都不应 send');
+
+    // 幂等: 重复调用不报错
+    assert.doesNotThrow(() => engine.unbindVideoEvents(), 'unbindVideoEvents 重复调用不报错');
+  });
+
+  test('bind/unbind 反复调用不会累积 listener (v0.6.2 fix 防 listener 累积)', () => {
+    const video = createMockVideo({ currentTime: 10, duration: 100 });
+    const send = createMockSend();
+    const engine = makeEngine(video, send);
+
+    // 模拟反复进房: bind → unbind → bind → unbind 多次
+    for (let i = 0; i < 5; i++) {
+      engine.unbindVideoEvents();
+      engine.bindVideoEvents();
+    }
+
+    send.clear();
+    video._emit('play');
+    // 应该有且仅有 1 次 send (而不是 6 次累积)
+    assert.strictEqual(send.calls.length, 1, 'bind/unbind 反复后 play 事件应只 send 1 次 (不累积)');
+  });
 });
 
 describe('DEFAULT_CONFIG', () => {
