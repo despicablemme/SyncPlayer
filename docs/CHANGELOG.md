@@ -59,7 +59,7 @@
 
 **功能**：
 - ✅ **持久化**：`app.getPath('userData')/video-history.json` (electron-store 默认位置)
-- ✅ **记录时机**：`videoloadedmetadata` 事件自动写入
+- ✅ **记录时机**：`video.loadedmetadata` 事件自动写入
 - ✅ **字段**：本地 `{type: 'local', path, name, size, mtime, addedAt}` / URL `{type: 'url', url, title, addedAt}`
 - ✅ **历史 UI**：视频选择对话框 "📜 历史" 按钮 + 最近 20 条
 - ✅ **一键重选**：本地 `loadVideo('file://'+path)` / URL `loadVideo(url, title)`
