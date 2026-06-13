@@ -3,7 +3,7 @@
 > **这是什么？** 主 agent (Jarvis) 接到主人任何目标（v0.6 / v0.7 / 新功能 / bug fix / 架构调整）后的**通用 3 阶段流程**。
 > **何时使用？** 主人说"下一个目标 = X" 之后, 主 agent **第一件事**就是读本文件, 然后照着跑。
 > **适用范围：** **所有目标** (不是某个版本专属)。
-> **最后更新：** 2026-06-09
+> **最后更新：** 2026-06-13 (v3 工作流修订: 阶段 A 完 → 全自动 B → C → D debug build 出, 主人 2026-06-13 22:20 决策)
 
 ---
 
@@ -372,7 +372,9 @@ await sessions_yield();  // 等完工事件
 
 ## 🎯 阶段 B: 实现 (做事) — 主 agent 详细动作
 
-### 做什么
+### 做什么 [v3, 2026-06-13 22:20 修订]
+
+> **v3 核心**: A 阶段**完**后 (主人 + Jarvis 经 Claude 确认最终方案 + 落实 MEETINGS 纪要), 阶段 B/C/D **全自动向下执行**, 遇到 bug 自动修, 测试不通过自动修, 除非**无法解决的错误**才通知主人. **debug 版本出**才停, 通知主人验收. release 仍需主人确认.
 
 #### B0: 拆任务 [v2, 2026-06-13 修订]
 
@@ -384,6 +386,25 @@ await sessions_yield();  // 等完工事件
 - **不**太大不**太小**（太大拆小, 太小合并）
 - N 的数量 = Claude A6 给的子任务数
 - 每个子任务的**实现内容** = Claude A6 给的具体步骤
+
+### B 阶段自动执行规则 (v3)
+
+- **全自动链**: B1 (派 Builder) → B2 (查交付 + 汇报) → B3 (派 Tester) → B4 (验收) → B5 (commit + push) → 串行跑完 N 个子任务
+- **除非遇到无法解决的错误** (e.g. 网络/磁盘/CI 永久失败, 权限阻塞, 3 次重试都 FAIL), **不**通知主人
+- **bug 自动修**: 子任务实施时发现非预期 bug → 主 agent 评估, 如果是当前子任务范围内 → 主 agent 修; 如果超出范围 → 开新子任务 (per B0 拆任务)
+- **测试不通过自动修**: Tester 报 FAIL → 主 agent 看测试报告 → 如果是实施方案错 (代码 bug) → 派 NEED FIX Builder 重做 (per B5); 如果是任务书错 (预期错) → 改任务书 + 重派; 如果是测试错 (Tester 自己写错) → 派新 Tester
+- **通知主人的条件** (per MEMORY #28/#29 + v3): 异常 (FAIL / 方向缺失 / 关键 trade-off) 或 **debug 版本出** 才通知
+
+### 主 agent 责任 (v3)
+
+- ✅ 派 subagent 跑代码改动前, **必**先 verify environment (per #30):
+  - `brew list gh` 验证 gh CLI
+  - `security find-internet-password -s github.com -w` 探 Keychain token
+  - `openclaw config get plugins.entries.github` 检查 OpenClaw GitHub 集成
+  - 缺啥装啥 (主 agent 自己做, 不问主人)
+- ✅ 派 Builder/Tester 前必 verify environment, 避免 v0.6.2 release 误触发的失误
+- ✅ 中间任何问题, 主 agent 评估 + 自己修 (per #10 subagent 失败主 agent 接手 模式)
+- ✅ **不**卡住问主人 "debug 怎么 trigger" 之类的"环境限制"问题 (per v3 主人原话)
 
 #### B-prep: 写任务书 (3 文件 × N)
 
@@ -497,12 +518,129 @@ await sessions_yield();  // 等完工事件
 
 ---
 
-## 🎯 阶段 C: 完工 (更新 docs) — 主 agent 详细动作
+## 🎯 阶段 D: Debug Build Trigger — 主 agent 详细动作 [v3, 2026-06-13 22:20 新增]
+
+> **v3 核心**: 阶段 C 完**直接**进 D, debug build 出来才停. 跟 v0.6.2 之前"卡住问主人 trigger 方案"失误 (per AGENT_PRACTICES #31) 决裂.
+
+### 触发条件
+
+- 阶段 C 全部完 (4 docs 更新 + 2 package.json 升版 + git tag 推)
+- **不**等主人确认, **不**问主人 "debug 怎么 trigger" (v3 主 agent **必须**自己 trigger)
+
+### 主 agent 责任 (v3 必修)
+
+1. **派 subagent 跑代码改动前必 verify environment** (per MEMORY #30):
+   ```bash
+   # 在派 Builder/Tester 跑代码改动前, 必跑
+   which gh || brew install gh  # 没装就装
+   security find-internet-password -s github.com -w  # 探 Keychain token, 10s 内必须出
+   openclaw config get plugins.entries.github  # 检查 OpenClaw github 集成
+   ```
+   - 缺啥**主 agent 自己装** (brew install gh / enable OpenClaw github 插件), **不**问主人
+   - sandbox 限制 (security 超时) → **告诉**主人在 Terminal 解锁 Keychain, 主 agent 仍**自动**继续尝试
+
+2. **trigger workflow_dispatch debug build** (Mac arm64 debug, per v0.6.2 决定):
+   ```bash
+   # 方案 1: 用 gh CLI (推荐, 主人 token 在 macOS Keychain, per #6)
+   gh workflow run build.yml \
+     --repo despicablemme/SyncPlayer \
+     --ref main \
+     -f version=<版本号> \
+     -f build_type=debug
+
+   # 方案 2: 用 curl + macOS Keychain token (gh 装不了时 fallback)
+   python3 -c "
+   import json, subprocess, urllib.request
+   token = subprocess.run(['security', 'find-internet-password', '-s', 'github.com', '-w'],
+                          capture_output=True, text=True, timeout=30).stdout.strip()
+   req = urllib.request.Request(
+     'https://api.github.com/repos/despicablemme/SyncPlayer/actions/workflows/build.yml/dispatches',
+     data=json.dumps({'ref':'main', 'inputs':{'version':'<版本号>', 'build_type':'debug'}}).encode(),
+     headers={'Accept':'application/vnd.github+json', 'Authorization':f'Bearer {token}',
+              'X-GitHub-Api-Version':'2022-11-28', 'User-Agent':'syncplay-auto-dispatch',
+              'Content-Type':'application/json'}, method='POST')
+   urllib.request.urlopen(req, timeout=30).read()
+   "
+
+   # 方案 3: OpenClaw github 插件 (如果 enabled + 有 token)
+   openclaw github workflow dispatch build.yml --ref main -f version=<版本号> -f build_type=debug
+   ```
+
+3. **验证 build trigger 成功**:
+   ```bash
+   # 查 GitHub Actions 最近 runs (public API, 不需 token)
+   curl -sS "https://api.github.com/repos/despicablemme/SyncPlayer/actions/runs?per_page=3" \
+     -H "Accept: application/vnd.github+json" | python3 -c "
+   import json, sys
+   d = json.load(sys.stdin)
+   for r in d['workflow_runs'][:3]:
+     print(f'  [{r["status"]}] {r["conclusion"] or "-"} | {r["name"]} | {r["event"]} | inputs={r.get("inputs",{})}')"
+   ```
+   - 看到 `event=workflow_dispatch` + `inputs.build_type=debug` + `status=in_progress/queued` 就算成功
+
+4. **等 build 跑通** (5-10 分钟 macos-latest 装 + electron-builder):
+   - cron 5 分钟轮询 build 状态 (跟 v0.6.2 一样, 但用 public API, **不**需 token)
+   - build 成功 (`conclusion=success` + artifact `syncplay-mac-arm64-debug` 存在) → 通知主人
+
+5. **build 失败** → 主 agent 评估:
+   - 如果是 build 本身错 (e.g. asar / sign / notarize) → 主 agent 修 build.yml + 重 trigger (per v3 全自动)
+   - 如果是代码错 → 走 NEED FIX 流程, 派新 Builder 修, 然后重 trigger debug build
+   - **不**问主人 (除非 3 次都失败)
+
+### 通知主人 (v3 唯一通知点)
+
+**debug build 跑通** → 通知主人 (per #20 主动汇报):
+```
+✅ <version> debug build 跑通
+- 触发: workflow_dispatch (build_type=debug)
+- run_id: <id>
+- artifact: syncplay-mac-arm64-debug (<size> MB)
+- 下载: https://github.com/despicablemme/SyncPlayer/actions/runs/<id>
+
+主人从 URL 下载 .dmg, 装上跑实测. 实测通过 → 主人通知主 agent 出 release 版本.
+```
+
+**实测 FAIL** → 主 agent 自动走 NEED FIX (派新 Builder 修, 重 trigger debug build), **不**问主人 (除非 3 次都 FAIL).
+
+### 不做什么 (v3)
+
+- ❌ **不**在阶段 B 完工**卡住**问主人 "debug 怎么 trigger" (per v0.6.2 失误)
+- ❌ **不**在阶段 C 完等主人确认, **直接**进 D
+- ❌ **不**trigger release workflow (v0.6.1 + v0.6.2 合并 release 仍需主人确认, per v0.6.2 决定)
+- ❌ **不**在中间 bug 修复时问主人 (主 agent 自己评估 + 修)
+
+### 主人介入点 (v3)
+
+- **debug build 跑通** → 主人实测
+- **实测通过** → 主人通知主 agent 出 release
+- **3 次 debug build 都 FAIL** (无法解决) → 主 agent 通知主人, 主人拍方向
+- **阶段 D 走不通** (e.g. workflow_dispatch 接口被禁, gh 装不上, Keychain 一直锁) → 主 agent 通知主人 (无法解决, 走 fallback)
+
+### 耗时
+
+- trigger 本身: 1-2 分钟
+- build 跑通: 5-10 分钟 (macos-latest runner)
+- 总: 7-15 分钟
+
+### 跟之前差异 (v0.6.2 之前 → v3)
+
+| 维度 | v0.6.2 之前 (v2) | v3 (主人 2026-06-13 22:20) |
+|---|---|---|
+| 阶段 B 完通知 | 通知主人 | **不**通知, 继续阶段 C |
+| 阶段 C 完通知 | 通知主人 | **不**通知, 继续阶段 D (debug build) |
+| Debug build trigger | 卡住问主人 (sandbox 限制) | **主 agent 自己 trigger** (verify env + 用 gh/curl/OpenClaw) |
+| Debug build 出 | (没跑到) | **通知**主人验收 |
+| Release | 主人决定 | **仍**主人决定 (通知主 agent 才出) |
+
+---
+
+## 🎯 阶段 C: 完工 (更新 docs) — 主 agent 详细动作 [v3, 2026-06-13 22:20 修订]
 
 ### 什么时候进
 
-- **全部 N 个子任务 PASS 后**
+- **全部 N 个子任务 PASS 后** (per B 阶段自动链)
 - **不**在某个子任务 PASS 时就更新 docs (那是"进度中转", 不是"完工")
+- **v3**: 阶段 C 完**不**通知主人, **直接**进阶段 D (debug build trigger), debug 出才通知
 
 ### 做什么
 
@@ -635,4 +773,4 @@ git rev-parse main origin/main
 ---
 
 *制定：Jarvis & 主人*
-*最后更新：2026-06-09*
+*最后更新：2026-06-13 (v3 工作流修订: A 完 → 全自动 B/C/D debug build 出, 主人 2026-06-13 22:20 决策)*

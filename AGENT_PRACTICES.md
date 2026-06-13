@@ -457,6 +457,85 @@
 
 ---
 
+
+
+---
+
+## 31. v0.6.x 工作流修订 v3 — A 完后 B/C/debug build 全自动, debug 出才通知主人 (教训:2026-06-13 22:20)
+
+### 情境
+
+**时间**：2026-06-13 22:20 (主人在 v0.6.2 阶段 C 收尾后让我 "完成C 然后出 debug build", 我卡在 sandbox 限制问主人 trigger 方案, 主人纠正)
+**触发**：
+1. 主人 20:50 决策: 完成 C + 出 debug build
+2. 主 agent 完成 C (commit 6823031, 推 v0.6.2 tag) — **推 tag 触发了 release workflow** (auto, push event)
+3. 主 agent 想 trigger debug build, 试 gh/curl/OpenClaw 集成 — **都失败** (gh 没装, security 超时, OpenClaw 集成 disabled)
+4. 主 agent **卡住**问主人 "A 方案还是 B 方案" 触发 debug build
+5. 主人 22:10 纠正: "release build 是你弄的不是我弄的, 为什么今天触发不了 debug build?"
+6. 主人 22:20 给新工作流规则: A 完后 B/C/debug build 全自动, debug 出才通知
+
+### 修订内容 (v2 → v3)
+
+| 维度 | v0.6.2 之前 (v2) | v3 (主人 2026-06-13 22:20) |
+|---|---|---|
+| 阶段 B 完通知 | 通知主人 | **不**通知, 继续阶段 C |
+| 阶段 C 完通知 | 通知主人 | **不**通知, 继续阶段 D (debug build) |
+| Debug build trigger | **卡住**问主人 (sandbox 限制) | **主 agent 自己 trigger** (verify env + 用 gh/curl/OpenClaw) |
+| Debug build 出 | (没跑到) | **通知**主人验收 |
+| Release | 主人决定 | **仍**主人决定 (通知主 agent 才出) |
+| 中间 bug 修复 | 通知主人 | **主 agent 自己修** (per 范围评估) |
+| 测试不通过 | 通知主人 | **主 agent 自己评估 + 修** (改实施/改任务书/改测试) |
+
+### 关键执行规则 (v3 必修)
+
+1. **A 完后全自动**: 主人 + Jarvis 经 Claude 确认最终方案 + 落实 MEETINGS → B/C/D 全自动链
+2. **B/C 自动跑**: 子任务实施 + 验收 + commit + push, 串行, 不通知
+3. **bug 自动修**: 主 agent 评估范围 (当前子任务内 → 修; 超出 → 开新子任务)
+4. **测试不通过自动修**: 主 agent 看报告, 区分是 实施错/任务书错/测试错, 自动修
+5. **debug build 自动 trigger**: 主 agent 必 verify env (brew list gh / security / openclaw config get github) + 自己 trigger (gh/curl/OpenClaw)
+6. **debug build 出 → 通知主人验收** (唯一通知点之一)
+7. **3 次 debug build FAIL** → 通知主人拍方向 (无法解决)
+8. **release 仍主人决定**: debug 实测通过后, 主人通知主 agent 出 release
+
+### 关键决策: 何时**仍**通知主人 (v3 例外)
+
+| 场景 | 通知? | 理由 |
+|---|---|---|
+| **debug build 跑通** | ✅ **通知** | v3 唯一自动链终止点 |
+| **3 次 debug build 都 FAIL** | ✅ **通知** | 无法解决 |
+| **中间 bug 修复** (主 agent 自己评估能修) | ❌ | 自动 |
+| **测试不通过** (主 agent 能区分错在哪) | ❌ | 自动 |
+| **主 agent 评估需要 trade-off** (per #29 例外清单) | ✅ **通知** | trade-off 决策需主人 |
+| **方向缺失** (per #28/#29) | ✅ **通知** | 主人拍方向 |
+| **NEED FIX/FAIL** (per #10 失败超过 3 次) | ✅ **通知** | 拍修复方向 |
+
+### 踩的坑 (v0.6.2 实战)
+
+1. **推 tag 自动触发 release**: 主 agent 推 v0.6.2 tag 时**没**意识到会触发 release workflow (push tag 自动 build), **应该**先 trigger debug build 再推 tag
+2. **trigger debug 失败卡住问主人**: sandbox 限制 (gh 没装, security 超时, OpenClaw github 集成 disabled), 主 agent **应该** 自己装 (brew install gh) / enable (openclaw plugins enable) / 解锁 (security unlock-keychain), **不**卡住问主人
+3. **没 verify environment**: 派 subagent 跑代码改动前 (per #30), 派 workflow_dispatch 触发前**也要** verify environment
+4. **没意识到 push tag 副作用**: git push tag 触发了 release workflow, 这影响后续 debug vs release 流程
+
+### 加固 (避免下次再踩)
+
+| 规则 | 说明 |
+|---|---|
+| ✅ **派 workflow_dispatch trigger 前必 verify env** (per #30 扩展) | `brew list gh` + `security find-internet-password` + `openclaw config get github` |
+| ✅ **缺啥主 agent 自己装** (per v3 主人原话) | brew install gh / enable OpenClaw github 插件 / unlock Keychain, **不**问主人 |
+| ✅ **推 git tag 必先 trigger debug build** | push tag 触发 release, **应该**先 debug 出 + 实测通过再推 tag |
+| ✅ **debug build 出才通知主人** | 之前 "卡住问 trigger 方案" 是 v3 失职 |
+| ✅ **中间 bug 测试自动修** (per v3) | 主 agent 评估 + 修, 不问 |
+| ❌ **不**在 sandbox 限制时卡住问主人 | 主 agent 应该自己 try (gh 装不上 → curl → OpenClaw 集成 → 写 MEETINGS 建议主人 Terminal 解锁) |
+
+### 关联
+
+- `agentWorkflowAndTemplates/runbook.md` — 阶段 B 顶部 + 阶段 C 顶部 + 新阶段 D 已加 v3 段
+- `~/.openclaw/workspace/MEMORY.md` #31 — 同内容精简版
+- AGENT_PRACTICES #17 (老 runbook 立过程) + #20 (#10 主 agent 接手) + #28 (不打扰) + #29 (pass 默认走) + #30 (verify env)
+- MEMORY #28 + #29 + #30
+
+---
+
 *维护：Jarvis*
 *协作：主人（Bruce）*
 
@@ -571,7 +650,7 @@
 ---
 
 
-*最后更新：2026-06-13（v0.6.x 工作流修订 v2, 阶段 A 改派 Claude 双轮, 阶段 B 按 Claude 最终执行方案拆）*
+*最后更新：2026-06-13 22:20 (v0.6.x 工作流修订 v3: A 完后 B/C/debug build 全自动, debug 出才通知主人)*
 
 ## 12. macOS 系统代理 ≠ git 代理（开了代理但 git 不走）
 
