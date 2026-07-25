@@ -54,6 +54,10 @@
   <script src="config.local.js"></script>      <!-- 404 时浏览器继续,fallback 到 template -->
   <script src="config.template.js"></script>  <!-- 默认占位符 -->
   <script src="../shared/sync-engine.js"></script>
+  <!-- v0.7 阶段 B-C: MSE 集成 + fMP4 容器转换(必须在 app.js 之前加载,会写 window.SyncPlayMedia) -->
+  <script src="../shared/mp4-ftyp-parser.js"></script>
+  <script src="../shared/container-transmux.js"></script>
+  <script src="mse-player.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

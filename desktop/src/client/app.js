@@ -234,13 +234,79 @@
   const copyBtn = document.getElementById('copyBtn');
 
   let connMgr = null;
+  let activeMse = null; // v0.7-B-C: track active MsePlayer so we can destroy on next load
+
+  // v0.7-B-C: pull media helpers exposed on window.SyncPlayMedia by the
+  // mp4-ftyp-parser / container-transmux / mse-player <script> tags in index.html.
+  const { MsePlayer, transmuxToFmp4, parseFtyp } = window.SyncPlayMedia || {};
+
+  // v0.7-B-C: 容器文件后缀 (走 ffmpeg.wasm transmux + MSE)
+  const CONTAINER_RE = /\.(mkv|avi|flv|mov|wmv)(\?|$)/i;
 
   // 视频加载
-  function loadVideo(src, label) {
+  async function loadVideo(src, label, options = {}) {
     fileName.textContent = label;
-    video.src = src;
     video.style.display = 'block';
     noVideo.style.display = 'none';
+
+    // v0.7-B-C: 销毁前一个 MsePlayer (loadVideo 多次调用时不泄漏 MediaSource)
+    if (activeMse) {
+      try { activeMse.destroy(); } catch (_) {}
+      activeMse = null;
+    }
+
+    // v0.7-B-C: 检测 mkv/avi/flv/mov/wmv 容器
+    // - options.file: 本地 File 对象 (来自 file input)
+    // - src 末尾后缀: 远程 URL
+    const containerName = (options.file && options.file.name) || src || '';
+    const isContainer = !src.startsWith('data:') && CONTAINER_RE.test(containerName);
+
+    if (isContainer && MsePlayer && transmuxToFmp4 && parseFtyp) {
+      try {
+        toast('正在转封装 mkv/avi/flv ...', 'info');
+        const input = options.file || await fetch(src).then((r) => {
+          if (!r.ok) throw new Error(`FETCH_FAIL_${r.status}`);
+          return r.blob();
+        });
+        const fmp4Bytes = await transmuxToFmp4(input, {
+          onProgress: ({ percent }) => {
+            toast(`转封装进度 ${(percent || 0).toFixed(0)}%`, 'info');
+          },
+        });
+
+        // v0.7-B-C: parse ftyp to get codec 4CC hint for MSE SourceBuffer MIME
+        let ftypInfo;
+        try {
+          ftypInfo = parseFtyp(fmp4Bytes);
+        } catch (e) {
+          // ftyp 缺失或不规范 — 用 fMP4 默认 codec (现代 Chromium 可自行探测)
+          ftypInfo = { mimeType: 'video/mp4', codec: 'avc1' };
+        }
+
+        const mse = new MsePlayer(video);
+        activeMse = mse;
+        await mse.addSourceBuffer(ftypInfo.mimeType, ftypInfo.codec);
+        await mse.appendFmp4(fmp4Bytes);
+        await mse.end();
+
+        // 后续: 依赖 <video> 元素的 loadedmetadata / canplay 事件触发 sync engine
+        // (MSE 模式下浏览器解码器会从 fMP4 moof/mdat 重建 timeline,
+        //  video.duration/play/pause/seeked/currentTime 事件跟 native src 行为一致)
+        return;
+      } catch (e) {
+        const msg = (e && e.message) || String(e);
+        if (msg.includes('SOFT_ENCODE_FALLBACK_UNSUPPORTED')) {
+          toast('SyncPlay 暂不支持此格式，请用 VLC 打开或转码为 MP4 (H.264+AAC)', 'error');
+          return;
+        }
+        console.error('[loadVideo] transmux error', e);
+        toast(`加载失败: ${msg}`, 'error');
+        return;
+      }
+    }
+
+    // 默认路径: mp4 / webm / m3u8 / blob (浏览器原生支持)
+    video.src = src;
     video.load();
   }
 
@@ -248,7 +314,7 @@
     const file = e.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      loadVideo(url, '本地: ' + file.name);
+      loadVideo(url, '本地: ' + file.name, { file });
     }
   });
 

@@ -174,3 +174,18 @@ module.exports = {
   transmuxToFmp4,
   validateFmp4,
 };
+
+// Browser-side exposure (Electron renderer has contextIsolation: true, nodeIntegration: false,
+// so renderer cannot use require()). Exposed onto shared window.SyncPlayMedia namespace.
+if (typeof window !== 'undefined') {
+  window.SyncPlayMedia = window.SyncPlayMedia || {};
+  Object.assign(window.SyncPlayMedia, {
+    MAX_INPUT_SIZE,
+    buildCopyCommand,
+    describeStreams,
+    parseProbeLog,
+    probeStreams,
+    transmuxToFmp4,
+    validateFmp4,
+  });
+}
