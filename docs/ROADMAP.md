@@ -10,9 +10,9 @@
 ## 🚦 当前迭代
 
 **目标版本**：v0.7 — **多视频格式支持 + 视频播放硬件解码**（立项 2026-07-25，主人决策，原候选主题全部取消，方案 B 拍板 ffmpeg.wasm + MSE + hls.js）
-**当前阶段**：v0.6.2 已 Shipped (2026-06-13) → **v0.7 阶段 A 完工** (2026-07-25 18:51, Claude 双轮 + 5 trade-off 拍板) → **v0.7 阶段 B 实施启动**（6 子任务: A 基础设施 → B ffmpeg.wasm → C MSE → D hls.js → E 测试矩阵 → F release 准备, v3 全自动, 遇 FAIL 才通知）
-**上一里程碑**：v0.7 阶段 A 完工 (Claude Round 1 3m22s + Round 2 1m47s + 主人 18:48 默认采纳全部 5 trade-off) — MEETINGS #015
-**下一里程碑**：v0.7-B-A 基础设施（Electron 38 升级 + 依赖装 + 现有测试通过） → B ffmpeg.wasm 转封装 → C MSE 集成 → D HLS → E 测试矩阵 → F release + docs
+**当前阶段**：v0.7 **阶段 B 实施 6 子任务全 PASS** (2026-07-25, 6 commits 0040ac2 / e8ca1f5 / c85144b / 478f908 / c3837be / 49bf92bc 已推 origin/main per #15 verify) → **v0.7 阶段 C trigger debug build** (主 agent verify env per #30 + gh CLI trigger workflow_dispatch build_type=debug Mac arm64) → 主人装 .dmg 实测 (介入点 2)
+**上一里程碑**：v0.7 阶段 B 实施 6 子任务完工 (6 commits 推 origin/main, CHANGELOG v0.7.0 临时段 + README 支持矩阵 已加 per B-F). 163/163 测试 pass.
+**下一里程碑**：阶段 C trigger workflow_dispatch debug build → 主人实测 9 格式 + 同步 + 硬解证据链 → 阶段 D 推 v0.7.0 tag → release workflow → 阶段 E 真 release 段
 
 ---
 

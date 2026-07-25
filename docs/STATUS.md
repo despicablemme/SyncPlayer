@@ -9,8 +9,8 @@
 
 ## 🚦 一句话状态
 
-**当前版本：v0.6.2 (Shipped 2026-06-13)** — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); TRANSITIONS 表放宽 + exitRoom 清 myVideoInfo + 2 个清理项 (peer.on('open') 走 recomputeRoomState + SyncEngine.unbindVideoEvents) + 远端 Mac arm64 debug build workflow_dispatch 入口
-**下一目标：v0.7** — **多视频格式支持 + 视频播放硬件解码**（**阶段 A 完工 2026-07-25 18:51**: Claude 双轮最终方案 + 5 trade-off 拍板 + 测试样本 = 太空旅客.mkv 1.64 GB; **阶段 B 实施启动**: 6 子任务 A 基础设施 → B ffmpeg.wasm → C MSE → D hls.js → E 测试矩阵 → F release 准备, v3 全自动串行）
+**当前版本：v0.7 (阶段 B 实施完工 2026-07-25)** — 多视频格式 + 视频播放硬件解码: 6 子任务全 PASS (commit 0040ac2 / e8ca1f5 / c85144b / 478f908 / c3837be / 49bf92bc 已推 origin/main per #15 verify). 6 子任务 = A 基础设施 + B ffmpeg.wasm transmux + C MSE 集成 + D hls.js HLS + E 测试矩阵 + F release 准备. CHANGELOG v0.7.0 临时段 + README 支持矩阵 已加.
+**下一目标：v0.7 阶段 C** — 主 agent trigger workflow_dispatch debug build → 主人装 .dmg 实测 (介入点 2: 9 格式 + 同步 + 硬解证据链). 实测通过 → 阶段 D 推 tag → 阶段 E 真 release 段.
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
