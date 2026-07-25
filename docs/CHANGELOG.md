@@ -164,15 +164,133 @@
 
 ---
 
-## [未发布]
+## [0.7.0] - TBD （阶段 B-A/B/C/D/E 子任务已 PASS，等阶段 C 主人实测验收后定 release 日期）
 
-### 下一版本 v0.7 计划（待拍, 主人实测 v0.6.2 debug build 通过后立项）
+### 🎬 多视频格式支持 + 视频播放硬件解码 (v0.7.0)
 
-**目标**：TURN UI / Linux AppImage 验证 / 移动端响应式 (待主人拍)
+**目标**：把 SyncPlay 从"只支持 mp4 / webm"扩展到 9 种主流容器, 同时启用 Chromium 硬件解码 (硬解) 充分发挥 M-series / DXVA / VAAPI 性能.
+
+#### 新功能
+
+- 🆕 **多视频格式支持** — ffmpeg.wasm + MediaSource Extensions (MSE) + hls.js 集成
+  - 支持容器: **mp4 / webm / mkv / avi / flv / mov / wmv / m3u8 (HLS)** (共 8 大类)
+  - 路径分发 (per `desktop/src/client/app.js` `loadVideo()` 决策树):
+    - `*.m3u8` (HLS) → `HlsPlayer` → hls.js → MSE → `<video>`
+    - `*.mkv / *.avi / *.flv / *.mov / *.wmv` → `transmuxToFmp4` (ffmpeg.wasm) → fMP4 → `MsePlayer` → MSE → `<video>`
+    - `*.mp4 / *.webm / blob` → `video.src = src` (Chrome 原生 + 硬解)
+  - **不支持**的容器: 见 README "支持矩阵" 段
+  - 软编 fallback: v0.7 MVP **暂不支持** (Xvid / DivX 等老 codec 提示用 VLC)
+  - 字幕: MVP 丢弃 (v0.7.x 加 WebVTT 客户端轨道)
+
+- 🆕 **视频播放硬件解码** (Chromium 默认开, 主人零代码成本)
+  - macOS M-series: **VideoToolbox** (HEVC 8K/120fps; AV1 M1+)
+  - Windows: **DXVA** (Intel Gen10+ iGPU)
+  - Linux: **VAAPI**
+  - 硬解证据链三件套 (阶段 C 主人实测):
+    - `chrome://gpu` → "Video Acceleration Information" 段有 "Decode hevc main" / "Decode av1 main"
+    - macOS Activity Monitor → `VTDecoderXPCService` 进程 CPU > 0 当 HEVC 视频播放
+    - 主进程 Electron CPU < 20% 当 HEVC 视频播放 (硬解 = GPU 工作)
+
+- 🆕 **基础设施升级**:
+  - Electron `33.4` → `^38.0.0` (拿 Chromium 140+ 增强硬解 + 现代 web API)
+  - 加依赖: `hls.js ^1.6.16` + `@ffmpeg/ffmpeg ^0.12.15` + `@ffmpeg/util ^0.12.2` + `@ffmpeg/core ^0.12.10` (本地打包到 `desktop/public/`, 含 ffmpeg-core.js + ffmpeg-core.wasm)
+  - 新增 `desktop/prebuild.js`: 构建前把 `desktop/public/{hls.min.js, ffmpeg/*}` 拷进 asar + unpack `public/**/*`
+  - SharedArrayBuffer 支持已验证 (B-A 探测 OK)
+
+#### 决策树 (拍板自 `tasks/v0.7.0/01-fix-plan.md` 的 5 个 trade-off)
+
+| Trade-off | 拍板 |
+|-----------|------|
+| 多轨 vs 单轨 | **多轨 (3 轨)**: 原生 `<video>` + hls.js + ffmpeg.wasm + MSE |
+| fMP4 默认 codec | **avc1** (兼容性最高; 95% 设备直解; 不动用 hvc1) |
+| SyncEngine 兼容性 | **不动 SyncEngine**; MSE / hls.js / 原生路径下的 `play / pause / seeked` 事件原生触发 |
+| 测试矩阵运行位置 | **Electron renderer 跑**, Node 子进程跑不动 (无 DOM 无 SAB 无 MSE) |
+| 硬解验证方法 | **证据链 (3 项并列)**: chrome://gpu + VTDecoderXPCService + 主进程 CPU < 20% |
+
+#### 新增 / 修改文件
+
+| 路径 | 类型 | 用途 |
+|------|------|------|
+| `desktop/src/client/app.js` | 改 | `loadVideo()` 决策树 + HlsPlayer / MsePlayer 实例化 |
+| `desktop/src/client/{hls-player,mse-player}.js` | 新 | HLS + MSE 播放器封装 |
+| `desktop/src/shared/container-transmux.js` | 新 | ffmpeg.wasm → fMP4 transmux 逻辑 |
+| `desktop/prebuild.js` | 新 | 构建前把 hls.min.js + ffmpeg core 拷进 public/ |
+| `desktop/public/ffmpeg/{ffmpeg-core.js, ffmpeg-core.wasm}` | 新 | ffmpeg core @ 0.12.x (本地打包, 离线可用) |
+| `desktop/public/hls.min.js` | 新 | hls.js bundle (本地打包, 离线可用) |
+| `desktop/package.json` | 改 | version `0.6.2 → 0.7.0` + 新增 deps |
+| `package.json` (根) | 改 | version `0.6.2 → 0.7.0` |
+| `src/shared/sync-engine.js` | 改 (极小) | `unbindVideoEvents()` 配对 (B-A 加的, v0.7 沿用) |
+| `src/client/app.js` | 改 (历史) | v0.6.2 的 recomputeRoomState / exitRoom 清 myVideoInfo (v0.7 沿用) |
+| `desktop/test/unit/*.test.js` | 新 + 改 | 17 个 B-E 新 sync-engine 测试 + 5 个 B-A 加测试 |
+| `desktop/test/integration/{multi-format-matrix,sync-dual-window,hw-decode-evidence}.test.js` | 新 | 9 格式 + 双窗口 + 硬解 (默认 SKIP, Electron renderer 跑) |
+| `desktop/test/fixtures/sample-urls.md` | 新 | 7 个公网样本 URL + 主人本地 太空旅客.mkv |
+| `README.md` | 改 | 加 "支持矩阵" 段; 升版本号 + 下载链接 |
+
+#### DoD (验收)
+
+- [x] `npm test` 100% pass (root `test/unit/*` 112/112 + desktop `test/unit/*` 51/51 = **163/163 总 pass** per B-E 报告)
+- [x] 9 格式测试矩阵就位 (`multi-format-matrix.test.js` 默认 SKIP, Electron renderer 跑)
+- [x] 双窗口同步回归就位 (`sync-dual-window.test.js` 默认 SKIP)
+- [x] 硬解证据链 3 项验证脚本就位 (`hw-decode-evidence.test.js` 默认 SKIP; 阶段 C 主人实测)
+- [x] GitHub Actions Mac arm64 debug build 入口 (`workflow_dispatch build_type=debug`) 已验证 OK (v0.6.2 阶段加, v0.7 复用)
+- [ ] 1 个 B-F commit (本地, 不 push) — **待主 agent 统一 push**
+- [ ] 阶段 C 主人实测 (Mac arm64 debug .dmg) 验收通过 — **待主人介入点 2** (per `tasks/v0.7.0/02-execution-plan.md` §6)
+
+#### Commits (本版本, 6 子任务, 全部 PASS)
+
+- `49bf92b` chore(v0.7-B-A): electron 38 + media deps + prebuild + SAB probe
+- `c3837be` feat(v0.7-B-B): ffmpeg.wasm 容器转封装 (mkv/avi/flv → fMP4)
+- `478f908` feat(v0.7-B-C): MSE MediaSource 集成 + loadVideo mkv/avi/flv 分支
+- `c85144b` feat(v0.7-B-D): hls.js HLS 集成 + loadVideo m3u8 分支
+- `e8ca1f5` test(v0.7-B-E): 9 格式测试矩阵 + 同步回归 + 硬解证据链
+- **本 commit** chore(v0.7-B-F): bump 0.6.2 → 0.7.0 + CHANGELOG/README temp 段
+
+#### 验证状态 (per B-E 报告 §7)
+
+- ✅ 单元测试 `npm test` 163/163 PASS
+- ✅ 集成测试代码完整 + 默认 SKIP (Electron renderer 跑)
+- ✅ 硬解证据链 3 项验证脚本就位
+- ✅ 9 格式测试矩阵占位写完
+- ✅ 5 trade-off 拍板 (per `tasks/v0.7.0/01-fix-plan.md`)
+- ⏳ 主人实测 (阶段 C debug build → 实测) — **待主人介入点 2**
+- ⏳ git tag `v0.7.0` 推送 — **待主 agent 阶段 D**
+- ⏳ ✅ Released 段 (含 release page + 3 assets) — **待主 agent 阶段 E (用真实 tag + URL 替换本段的 TBD)**
+
+#### 🆕 Released (TBD — 阶段 E 填实际数据)
+
+> 临时占位段。阶段 E (master agent) 会把下方 TBD 全部替换为真实数据:
+
+- **Released**: TBD (`{YYYY-MM-DD}`)
+- **Release page**: TBD (`https://github.com/despicablemme/SyncPlayer/releases/tag/v0.7.0`)
+- **Assets (3, TBD 实际大小)**:
+  - 🍎 macOS: TBD (`SyncPlay-0.7.0-arm64.dmg`, ~96 MB)
+  - 🐧 Linux: TBD (`SyncPlay-0.7.0.AppImage`, ~104 MB)
+  - 🪟 Windows: TBD (`SyncPlay Setup 0.7.0.exe`, ~80 MB)
+
+#### 文档 (本 commit 改 + 主 agent 阶段 C/E 改)
+
+- ✅ `README.md` 加支持矩阵段 + 升当前版本 v0.4.0 → v0.7.0 + 下载链接 (本 commit)
+- ✅ `docs/CHANGELOG.md` 加本段 (本 commit — 临时, 阶段 E 升级为 release 段)
+- ⏳ `docs/STATUS.md` v0.7 阶段 B → ✅ Shipped + 加 ✅ Released 段 — **待主 agent 阶段 C/E**
+- ⏳ `docs/ROADMAP.md` v0.7 状态改 ✅ Shipped + 加 ✅ Released 段 — **待主 agent 阶段 C/E**
+- ⏳ `docs/MEETINGS.md` 加 #016 v0.7 阶段 B 完工纪要 + #017 v0.7 release 完工纪要 — **待主 agent 阶段 C/E**
+- ⏳ `AGENT_PRACTICES.md` 加 v0.7 反思条目 (e.g. 5 trade-off 拍板记录 + GPL 风险缓解) — **待主 agent 阶段 E**
+
+#### 引用
+
+- `tasks/v0.7.0/01-fix-plan.md` (5 trade-off + 6 子任务 commit plan)
+- `tasks/v0.7.0/02-execution-plan.md` §6 (v0.7 release 准备) + Claude Round 2 §6
+- `agentWorkflowAndTemplates/runbook.md` §C (临时文档规则)
+- `tasks/v0.7.0/v0.7-B-{A,B,C,D,E,F}-test-report.md` (6 子任务全部 PASS)
+- `desktop/test/fixtures/sample-urls.md` (7 公网 URL + 主人本地)
+
+---
 
 ### 后续版本计划
 
-- **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化 + 移动端响应式
+- **v0.7.x**：TURN 凭据管理 UI + 跨网段 UX 优化 + 移动端响应式 + WebVTT 字幕客户端 (v0.7 MVP 推迟)
+- **v0.7.x**：软编 fallback (Xvid / DivX 老 codec, v0.7 MVP 推迟)
+- **v0.7.x**：分段 (chunked) 大文件支持 (v0.7 MVP 限 2 GB)
 - **v1.0**：互联网可用正式版（Mac/Windows/Linux 全平台安装包 + 签名/公证）
 
 ---

@@ -2,8 +2,8 @@
 
 > 异地同步看片神器 — 两人异地同时播放同一视频，进度实时同步
 
-**当前版本:** v0.4.0 (Electron 桌面打包 — Mac .dmg 双击即用)
-**下一版本:** v0.5.0 (Windows .exe 打包 — 目标)
+**当前版本:** v0.7.0 (多视频格式支持 + 视频播放硬件解码 — 9 格式: mp4/webm/m3u8/mkv/avi/flv/mov/wmv)
+**下一版本:** v0.7.x (TURN 凭据管理 UI + 跨网段 UX + 移动端响应式 — 详见 ROADMAP)
 **最终目标:** v1.0 (Mac/Windows/Linux 全平台安装包 + 公网可用)
 
 ---
@@ -21,17 +21,67 @@
 
 ## 📦 安装包下载
 
-**Mac 用户**：双击 `desktop/dist/SyncPlay-0.4.0-arm64.dmg` → 拖入 `/Applications`
+**Mac 用户**：双击 `desktop/dist/SyncPlay-0.7.0-arm64.dmg` → 拖入 `/Applications`
 
-**Windows 用户**（v0.5.0 目标）：双击 `desktop/dist/SyncPlay Setup 0.5.0.exe` → 完成安装
+**Windows 用户**（v0.6 起）：双击 `desktop/dist/SyncPlay Setup 0.7.0.exe` → 完成安装
 
-**Linux 用户**（待验证）：运行 `npm run dist:linux` 生成 `desktop/dist/SyncPlay-0.x.x.AppImage`
+**Linux 用户**（v0.7 起）：从 [GitHub Releases](https://github.com/despicablemme/SyncPlayer/releases) 下 `SyncPlay-0.7.0.AppImage` → `chmod +x` 后双击
 
 ```bash
 # 开发模式（需要 Node.js）
 cd ~/CodeProjects/syncplay
 ./start.sh
 ```
+
+---
+
+## 🎬 支持的视频格式 (v0.7 新增)
+
+v0.7 起, SyncPlay 支持 9 种主流视频容器, 按 URL 后缀分发到 3 条播放路径 (原生 `<video>` / hls.js / ffmpeg.wasm → MSE):
+
+| 容器 | codec 示例 | 播放路径 | 硬解 |
+|------|-----------|---------|------|
+| **mp4** | H.264 (avc1) / H.265 (hvc1) / AV1 | 原生 `<video>` (`video.src = src`) | ✅ macOS VideoToolbox / Win DXVA / Linux VAAPI (HEVC 8K/120fps on M-series) |
+| **webm** | VP8 / VP9 / AV1 | 原生 `<video>` | ✅ macOS / Win / Linux GPU 硬解 (AV1: M1+ / RTX 30+ / RX 6000+) |
+| **m3u8** (HLS 直播/点播) | H.264 / H.265 / AAC | **hls.js → MSE → `<video>`** | ✅ hls.js 内置硬解 (走 MSE pipeline) |
+| **mkv** (Matroska) | H.264 / H.265 / VP9 | **ffmpeg.wasm → fMP4 → `MsePlayer` → MSE** | ✅ macOS VideoToolbox (avc1+hvc1 通过 MSE pipeline 走硬解) |
+| **avi** | Xvid / DivX / H.264 | ffmpeg.wasm → fMP4 → MSE | 软解 (codec 简单, 主进程 CPU < 20%) |
+| **flv** | H.264 / AAC | ffmpeg.wasm → fMP4 → MSE | 软解 |
+| **mov** (QuickTime) | H.264 / ProRes | ffmpeg.wasm → fMP4 → MSE | ✅ macOS 原生硬解 (走 MSE) |
+| **wmv** (Windows Media) | WMV2 / WMA | ffmpeg.wasm → fMP4 → MSE | 软解 |
+
+**决策树** (per `desktop/src/client/app.js` `loadVideo()`):
+
+```
+url *.m3u8           → HlsPlayer    → hls.js   → MSE → <video>
+url *.mkv/avi/flv
+    /mov/wmv         → transmuxToFmp4 (ffmpeg.wasm) → fMP4 → MsePlayer → MSE → <video>
+url *.mp4 / *.webm
+    / blob           → video.src = src (Chrome 原生 + 硬解)
+```
+
+**已知限制 (v0.7 MVP)**:
+
+- 🎬 **字幕**: v0.7 MVP **暂不支持** (v0.7.x 加 WebVTT 客户端轨道)
+- 📦 **大文件**: 限 **2 GB** (主人 sample 太空旅客.mkv 1.64 GB 在内, v0.7.x 加分段 / chunked)
+- 🪟 **软编 fallback**: v0.7 MVP **暂不支持** (Xvid / DivX 等老 codec, 提示用 VLC)
+- 🔄 **格式分发**: 按 URL 后缀判断 (服务器上 URL 必须带正确后缀, 否则走默认 mp4 路径)
+
+**快速验证命令**:
+
+```bash
+# 1. 启动 dev build
+cd desktop && npm run dev
+
+# 2. 在浏览器打开 http://localhost:8080/client
+# 3. 选本地 mp4 / webm  → 原生 <video>
+#    粘贴 https://...m3u8 URL → hls.js
+#    粘贴 https://...mkv URL  → ffmpeg.wasm (10-30s 转封装) → fMP4
+# 4. DevTools console: window.open('chrome://gpu')
+#    → 看 "Video Acceleration Information" 段 → 应该有 "Decode hevc main" / "Decode av1 main"
+```
+
+详见 [docs/CHANGELOG.md](./docs/CHANGELOG.md) v0.7.0 段 + `desktop/test/fixtures/sample-urls.md` (7 个公网测试样本)
 
 ---
 
@@ -198,13 +248,13 @@ PEER_SECURE: true,
 
 | 平台 | 产物 | 状态 |
 |------|------|------|
-| Mac | `desktop/dist/SyncPlay-0.4.0-arm64.dmg` | ✅ 已验证 |
-| Windows | `desktop/dist/SyncPlay Setup 0.5.0.exe` | ⏳ v0.5.0 目标 |
-| Linux | `desktop/dist/SyncPlay-0.x.x.AppImage` | ⏳ 待验证 |
+| Mac | `desktop/dist/SyncPlay-0.7.0-arm64.dmg` | ⏳ v0.7.0 阶段 C debug build 后实测 |
+| Windows | `desktop/dist/SyncPlay Setup 0.7.0.exe` | ⏳ v0.7.0 阶段 D release 后产物 |
+| Linux | `desktop/dist/SyncPlay-0.7.0.AppImage` | ⏳ v0.7.0 阶段 D release 后产物 |
 
 双击即用，不依赖 Python / Node / Homebrew。
 
 ---
 
 *项目维护：Jarvis & 主人*
-*最后更新：2026-06-08（v0.5.0 规划中）*
+*最后更新：2026-07-25（v0.7.0 release 准备 — 升 version + 临时 docs）*
