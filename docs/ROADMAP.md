@@ -9,10 +9,10 @@
 
 ## 🚦 当前迭代
 
-**目标版本**：v0.7 — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍, 主人实测 v0.6.2 debug build 通过后拍)
-**当前阶段**：**v0.6.2 已 Shipped** (2026-06-13, BUG-2026-06-13-001 修完, 一次性 docs 收齐, 0.6.2 tag 推) → **v0.7 计划阶段 A 待主人拍**
-**上一里程碑**：v0.6.2 修 UI bug (重入房间状态脱钩) 全部 PASS (2026-06-13 Shipped, 主 agent A6 接手 per #10)
-**下一里程碑**：v0.7 - TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍)
+**目标版本**：v0.7 — **多视频格式支持 + 视频播放硬件解码**（立项 2026-07-25，主人决策，原候选主题全部取消，方案 B 拍板 ffmpeg.wasm + MSE + hls.js）
+**当前阶段**：v0.6.2 已 Shipped (2026-06-13) → **v0.7 阶段 A 完工** (2026-07-25 18:51, Claude 双轮 + 5 trade-off 拍板) → **v0.7 阶段 B 实施启动**（6 子任务: A 基础设施 → B ffmpeg.wasm → C MSE → D hls.js → E 测试矩阵 → F release 准备, v3 全自动, 遇 FAIL 才通知）
+**上一里程碑**：v0.7 阶段 A 完工 (Claude Round 1 3m22s + Round 2 1m47s + 主人 18:48 默认采纳全部 5 trade-off) — MEETINGS #015
+**下一里程碑**：v0.7-B-A 基础设施（Electron 38 升级 + 依赖装 + 现有测试通过） → B ffmpeg.wasm 转封装 → C MSE 集成 → D HLS → E 测试矩阵 → F release + docs
 
 ---
 
@@ -129,6 +129,85 @@
 - `0d4f922` fix(v0.6.2-A): 放宽 TRANSITIONS + 改测试 + exitRoom 清 myVideoInfo
 - `4000465` feat(v0.6.2-B): peer.on('open') 改走 recomputeRoomState + unbindVideoEvents + Mac arm64 debug workflow
 - `<v0.6.2-stage-c>` docs(v0.6.2): release status update + version bump (本 commit)
+
+---
+
+## 🚧 v0.7 — 多视频格式支持 + 视频播放硬件解码 (立项 2026-07-25)
+
+**目标**：让 SyncPlay 能播主人日常会碰到的视频格式 (mp4 H.264/H.265 / webm VP9/AV1 / m3u8 HLS 直播源 / 偶尔 MKV)，并确保解码走 GPU 不爆 CPU。主人原话 (2026-07-25 18:07)："v0.7 的目标重新定为多视频格式支持，最好能支持视频播放硬件解码"。
+
+### 背景与决策
+
+- **原候选主题全部取消**（2026-07-25 主人决策）：TURN UI / Linux AppImage 验证 / 移动端响应式
+- **新方向**：实用性优先——朋友发来的 mp4 (H.264/H.265) / B 站片源 (AV1/HEVC) / 网盘下载的 MKV / 直播 m3u8 都能播，4K HEVC 不卡 CPU
+- **不取消的底层设施**：v0.6.2 修完的所有同步基础设施保留（RoomStateMachine / SyncEngine / VideoMatch / electron-store 视频历史 / debug build workflow）
+
+### 技术调研结论（主 agent 2026-07-25 调研）
+
+**好消息**：我们用的 **Electron 33.4 / Chromium 130 已经原生支持 HEVC 硬件解码**！Mac M-series 上 H.265 解码走 VideoToolbox（支持 8K/120fps），Windows 走 DXVA（Intel Gen10+ iGPU），Linux 走 VAAPI。**主人不需要任何额外代码就能让 HEVC 硬解生效**——只要不写 `disable-gpu`。
+
+| 格式 | 当前支持 | 硬解情况 |
+|------|---------|---------|
+| mp4 H.264 (avc1) | ✅ 原生 | ✅ 软/硬解（M-series 硬解） |
+| **mp4 H.265 (hvc1) HEVC** | ✅ Chromium 130 原生 | ✅ Mac VideoToolbox 8K/120fps / Win DXVA / Linux VAAPI |
+| webm VP8 | ✅ 原生 | ✅ 软解 |
+| webm VP9 | ✅ 原生 | ✅ 软/硬解（Intel Quick Sync / AMD VCN） |
+| webm AV1 | ✅ Chromium 130 原生 | ✅ 软解；M1+ / RTX 30+ / RX 6000+ 硬解 |
+| **m3u8 (HLS)** | ❌ Chromium 内核**不**原生支持 | ⚠️ 必须挂 hls.js |
+| mkv / avi / flv | ❌ Chromium **不**支持容器解析 | ❌ 要支持必须 ffmpeg.wasm（30MB wasm，复杂度高） |
+| data: / blob: / file:// | ✅ 原生 | — |
+
+### 候选方案（待主人拍板）
+
+主人最关心的两个 trade-off：
+
+**方案 A（推荐）：Electron 升级 + hls.js（最小改动，cover 90% 场景）**
+- **改动**：
+  1. `desktop/package.json`: `electron ^33.4.0` → `electron ^38.x` (拿最新 Chromium 140+)
+  2. 加 `hls.js ^1.5.x` 依赖（~1MB minified）
+  3. `src/client/app.js:loadVideo()` 检测 `.m3u8` → 用 `new Hls()` 接管 + `attachMedia(video)`
+  4. 不写 `disable-gpu`，让 Chromium 自动用 VideoToolbox/DXVA/VAAPI
+  5. `loadVideo()` 错误时给清晰提示（"格式不支持，请用 VLC 打开或转码为 mp4/h.265/webm"）
+- **支持**：mp4 (H.264/H.265) + webm (VP8/VP9/AV1) + m3u8 (HLS) + 硬解默认开
+- **不支持**：mkv / avi / flv（提示用户用 VLC）
+- **优点**：包体 +1MB，复杂度低，覆盖朋友间 90% 视频
+- **缺点**：mkv 用户要装 VLC 或自己转 mp4
+- **预计改动量**：3-4 个文件，~150 行代码
+
+**方案 B（重量，覆盖全）：方案 A + WebCodecs + ffmpeg.wasm 解 mkv/avi/flv**
+- 在方案 A 基础上加 ffmpeg.wasm 解容器
+- **改动**：方案 A + 集成 `@ffmpeg/ffmpeg` (~30MB wasm) + WebCodecs VideoDecoder 喂 VideoFrame + 自定义渲染循环
+- **优点**：理论上 ffmpeg 支持的一切容器都能播
+- **缺点**：包体 +30MB（v0.6.2 当前 80MB → 110MB），复杂度爆炸（容器解析+帧同步+渲染），调试地狱
+- **预计改动量**：8-10 个文件，~800 行代码 + 新架构
+
+**方案 C（保守）：仅文档化现状，不动代码**
+- 不改代码，只在 README + 视频加载错误时清楚告诉用户当前支持什么 / 不支持什么
+- **优点**：零风险
+- **缺点**：主人的"多视频格式"需求**没有**真正被解决（m3u8 仍然不播）
+
+### 主 agent 推荐 (按 #28 #29 #37)
+
+**走方案 A**：实用主义、复杂度低、覆盖日常 90%。主人原话"最好能支持硬件解码"刚好 Electron 33 + Chromium 130 默认就有，零成本。
+
+**mkv / avi / flv 留给 v0.7.x 阶段**：v0.7 落地后主人再决定要不要花 30MB wasm 成本做容器解封装。
+
+### 阶段 A 计划（待主人拍方案后开干）
+
+待方案拍板后, v0.7 阶段 B 拆分:
+- **v0.7-A 基础设施**：`electron` 升级 + `hls.js` 装 + loadVideo 检测 m3u8 接管逻辑
+- **v0.7-B 硬解验证**：写实测脚本在 Mac arm64 上跑 (chrome://gpu 看硬解状态 + Activity Monitor 看 GPU/CPU 占用)
+- **v0.7-C 错误 UX**：视频加载失败时给清晰"格式不支持 + 推荐格式"提示
+- **v0.7-D 测试 + 验收**：unit + Playwright e2e + 主人手动双窗口实测
+
+### DoD（v0.7 验收）
+
+- [ ] `npm run dist:mac` 出的 .dmg 装上能播 mp4 H.264 + mp4 H.265 + webm VP9 + webm AV1 + m3u8 HLS 全部 5 种
+- [ ] Mac Activity Monitor 看 HEVC 视频时 GPU (VideoToolbox) 占大头, CPU < 20%
+- [ ] 不支持的格式 (mkv) 加载时清晰提示 + 推荐方案
+- [ ] GitHub Actions release workflow 出 macOS / Win / Linux 三平台 asset
+- [ ] 单元测试 + e2e 全过
+- [ ] 文档化支持矩阵 (README + 视频选择对话框 tooltip)
 
 ---
 
@@ -327,8 +406,8 @@ A 浏览器 ──WSS──► PeerJS 公共信令 ──► B 浏览器
 | **v0.6.0** | **体验优化 + bug 修复** | 房间退出/换房 + 视频 URL bug + 视频匹配 | **✅ Shipped** (2026-06-09) |
 | **v0.6.1** | **视频添加历史记录 (FR-4)** | electron-store 持久化 + UI + 失效检测 + 清空 | **✅ Shipped** (2026-06-10, docs 2026-06-13 补) |
 | **v0.6.2** | **修 UI bug: 重入房间状态脱钩** | BUG-2026-06-13-001, TRANSITIONS 表修复 + 2 清理项 + 远端 debug workflow | **✅ Shipped** (2026-06-13) |
-| **v0.7** | **TURN UI / 跨网段 UX 优化 / 移动端响应式** | TURN 凭据管理 UI + 分享链接 + 移动端适配 | 🎯 当前 (待拍, 主人实测 v0.6.2 debug build 通过后立项) |
-| v0.7.x | TURN UI + UX | TURN 凭据管理 UI + 分享链接 + TURN 状态指示器 | 计划中 |
+| **v0.7** | **多视频格式支持 + 硬件解码（方案 B: ffmpeg.wasm + MSE + hls.js）** | mp4 (H.264/H.265) + webm (VP9/AV1) + m3u8 (HLS) + **mkv/avi/flv/mov/wmv 等 ffmpeg 支持的一切** + Chromium 默认硬解 | 🚧 阶段 B 实施中 (2026-07-25 18:21 主人拍板方案 B) |
+| v0.7.x (预留) | ffmpeg.wasm 软编兜底 | 对不兼容 mp4 容器码流的 mkv (Xvid/DivX) 加 -c:v libx264 重编路径 | ❓ 待 v0.7 验收后定 |
 | **v1.0** | **互联网可用** | **Metered SaaS TURN 已验证通过** | **目标** |
 | v2.0 | 多人房间 | 3 人以上同步 | 长期 |
 | v3.0 | 流媒体 | 一端本地、一端远程拉流 | 长期 |
@@ -364,7 +443,10 @@ v1.0 视为完成当且仅当:
 | 2026-06-09 | **v0.6** | **计划制定完成 (阶段 A) — 改方向为体验优化** |
 | 2026-06-10 | **v0.6.1** | **视频添加历史记录 (FR-4)：阶段 A 计划 + A/B/C 3 子任务全部 PASS, docs 2026-06-13 补** |
 | 2026-06-13 | **v0.6.2** | **修 UI bug (BUG-2026-06-13-001)：阶段 A 计划 (主 agent A6 接手) + A/B 2 子任务全部 PASS, 一次性 docs 收齐 + 0.6.2 tag 推** |
-| TBD | v0.7.x | TURN UI / Linux AppImage 验证 / 移动端响应式 (候选主题, 主人定方向) |
+| 2026-07-25 18:07 | **v0.7 立项** | **方向重定义: 多视频格式支持 + 硬件解码（原 3 候选主题取消, 主人决策, 主 agent 立阶段 A 计划）** |
+| 2026-07-25 18:21 | **v0.7 方案 B 拍板** | **主 agent 推方案 A 后被主人追问 "VLC 替代还能同步吗" 推翻 → 主人选方案 B (ffmpeg.wasm + MSE + hls.js), 立阶段 B 任务书 `tasks/v0.7.0/02-execution-plan.md`** |
+| 2026-07-25 18:51 | **v0.7 阶段 A 完工** | **Claude 双轮方案落地 (Round 1 3m22s + Round 2 1m47s) + 5 trade-off 默认采纳 + 6 子任务 commit plan 写死 (`tasks/v0.7.0/02-execution-plan.md` §0-§11) + 测试样本 = 太空旅客.mkv 1.64 GB metadata 实地采集** |
+| TBD | v0.7-B-A 实施 | 阶段 B v3 全自动启动: 派 Builder/Tester 串行 6 子任务 (A 基础设施 → B ffmpeg.wasm → C MSE → D hls.js → E 测试矩阵 → F release 准备), 遇 FAIL 才通知主人 |
 | TBD | v1.0 | 互联网可用正式版 |
 
 ---

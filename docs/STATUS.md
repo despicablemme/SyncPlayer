@@ -10,7 +10,7 @@
 ## 🚦 一句话状态
 
 **当前版本：v0.6.2 (Shipped 2026-06-13)** — 修 UI bug: 重入房间后底部状态栏与真实连接脱钩 (BUG-2026-06-13-001); TRANSITIONS 表放宽 + exitRoom 清 myVideoInfo + 2 个清理项 (peer.on('open') 走 recomputeRoomState + SyncEngine.unbindVideoEvents) + 远端 Mac arm64 debug build workflow_dispatch 入口
-**下一目标：v0.7** — TURN UI / Linux AppImage 验证 / 移动端响应式 (待拍, 主人实测 v0.6.2 debug build 通过后拍)
+**下一目标：v0.7** — **多视频格式支持 + 视频播放硬件解码**（**阶段 A 完工 2026-07-25 18:51**: Claude 双轮最终方案 + 5 trade-off 拍板 + 测试样本 = 太空旅客.mkv 1.64 GB; **阶段 B 实施启动**: 6 子任务 A 基础设施 → B ffmpeg.wasm → C MSE → D hls.js → E 测试矩阵 → F release 准备, v3 全自动串行）
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---
@@ -301,12 +301,18 @@ desktop/dist/
 
 ```
 ~/CodeProjects/syncplay/
-├── 状态: git clean (除 v0.4.0 本地 commits)
+├── 状态: git clean (停于 dcf5026 backup: 2026-06-14 18:00:13, 41 天没动)
 ├── 远程: https://github.com/despicablemme/SyncPlayer
-├── 依赖: desktop/ 已自包含
+├── 依赖: desktop/ 已自包含 (Electron 33.4 / Chromium 130, v0.7 阶段 B 准备升 38)
+├── v0.7-B 新增依赖: hls.js ^1.5 + @ffmpeg/ffmpeg ^0.12 (30MB wasm) + @ffmpeg/util ^0.12
+├── 硬解现状: Chromium 130 默认开 HEVC/AV1/VP9 硬件解码
+│   - macOS M-series: VideoToolbox (8K/120fps HEVC)
+│   - Windows: DXVA (Intel Gen10+ iGPU 完整 range)
+│   - Linux: VAAPI
 └── 启动:
-    - Mac: 双击 desktop/dist/SyncPlay-0.4.0-arm64.dmg
-    - Windows: 双击 desktop/dist/SyncPlay Setup 0.5.0.exe (v0.5 目标)
+    - Mac: 双击 desktop/dist/SyncPlay-0.6.2-arm64.dmg
+    - Windows: 双击 desktop/dist/SyncPlay.Setup.0.6.2.exe
+    - Linux: 双击 desktop/dist/SyncPlay-0.6.2.AppImage
     - 开发模式: ./start.command (Mac) / start.bat (Win)
 ```
 
