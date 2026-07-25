@@ -235,13 +235,16 @@
 
   let connMgr = null;
   let activeMse = null; // v0.7-B-C: track active MsePlayer so we can destroy on next load
+  let activeHls = null; // v0.7-B-D: track active HlsPlayer so we can destroy on next load
 
   // v0.7-B-C: pull media helpers exposed on window.SyncPlayMedia by the
   // mp4-ftyp-parser / container-transmux / mse-player <script> tags in index.html.
   const { MsePlayer, transmuxToFmp4, parseFtyp } = window.SyncPlayMedia || {};
+  const HlsPlayer = window.SyncPlayHlsPlayer;
 
   // v0.7-B-C: 容器文件后缀 (走 ffmpeg.wasm transmux + MSE)
   const CONTAINER_RE = /\.(mkv|avi|flv|mov|wmv)(\?|$)/i;
+  const HLS_RE = /\.m3u8(\?|$)/i;
 
   // 视频加载
   async function loadVideo(src, label, options = {}) {
@@ -253,6 +256,28 @@
     if (activeMse) {
       try { activeMse.destroy(); } catch (_) {}
       activeMse = null;
+    }
+    // v0.7-B-D: 销毁前一个 HlsPlayer (切换来源时不泄漏 hls.js 实例)
+    if (activeHls) {
+      try { activeHls.destroy(); } catch (_) {}
+      activeHls = null;
+    }
+
+    const sourceName = (options.file && options.file.name) || src || '';
+    const isHls = HLS_RE.test(sourceName);
+    if (isHls) {
+      let hls = null;
+      try {
+        if (!HlsPlayer) throw new Error('HLS_NOT_SUPPORTED');
+        hls = new HlsPlayer(video, src);
+        await hls.attach();
+        activeHls = hls;
+        return;
+      } catch (e) {
+        try { hls?.destroy(); } catch (_) {}
+        toast(`HLS 错误: ${e.message}`, 'error');
+        throw e;
+      }
     }
 
     // v0.7-B-C: 检测 mkv/avi/flv/mov/wmv 容器
@@ -305,7 +330,7 @@
       }
     }
 
-    // 默认路径: mp4 / webm / m3u8 / blob (浏览器原生支持)
+    // 默认路径: mp4 / webm / blob (浏览器原生支持)
     video.src = src;
     video.load();
   }
