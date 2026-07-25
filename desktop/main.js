@@ -8,7 +8,7 @@
  * 4. On quit, kill the child server process
  */
 
-const { app, BrowserWindow, ipcMain, webUtils } = require('electron');
+const { app, BrowserWindow, ipcMain, webUtils, session } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -152,6 +152,24 @@ function waitForServer(port = 9000, timeout = 15000) {
 }
 
 app.whenReady().then(async () => {
+  console.log('[syncplay-init]', JSON.stringify({
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    sab: typeof SharedArrayBuffer !== 'undefined',
+    webcodecs: typeof VideoDecoder !== 'undefined',
+  }, null, 2));
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Cross-Origin-Opener-Policy': ['same-origin'],
+        'Cross-Origin-Embedder-Policy': ['require-corp'],
+      },
+    });
+  });
+
   // ─── Video History IPC Handlers (v0.6.1 FR-4) ────────────────────────────
   ipcMain.handle('video-history:get', () => {
     return videoHistoryStore.get('items', []);

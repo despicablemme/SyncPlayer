@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
+    "test": "node --test ../test/unit/*.test.js",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist:linux": "electron-builder --linux",
-    "prebuild": "node -e \"const fs=require('fs');const path=require('path');const src='../src';const dest='src';function copyDir(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=path.join(s,f),dp=path.join(d,f);fs.statSync(sp).isDirectory()?copyDir(sp,dp):fs.copyFileSync(sp,dp)})};copyDir(src,dest);console.log('src/ copied into desktop/')\""
+    "prebuild": "node prebuild.js"
   },
   "keywords": [
     "webrtc",
@@ -21,7 +22,7 @@
   "author": "Bruce",
   "license": "Apache-2.0",
   "devDependencies": {
-    "electron": "^33.4.0",
+    "electron": "^38.0.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
@@ -39,7 +40,14 @@
     "asar": true,
     "asarUnpack": [
       "node_modules/**/*",
-      "src/server/**"
+      "src/server/**",
+      "public/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public"
+      }
     ],
     "mac": {
       "target": "dmg",
@@ -60,7 +68,11 @@
     }
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "electron-store": "^8.2.0",
+    "hls.js": "^1.6.16",
     "peer": "^0.6.1"
   }
 }
