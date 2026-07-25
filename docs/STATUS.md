@@ -9,8 +9,8 @@
 
 ## 🚦 一句话状态
 
-**当前版本：v0.7 (阶段 B 实施完工 2026-07-25)** — 多视频格式 + 视频播放硬件解码: 6 子任务全 PASS (commit 0040ac2 / e8ca1f5 / c85144b / 478f908 / c3837be / 49bf92bc 已推 origin/main per #15 verify). 6 子任务 = A 基础设施 + B ffmpeg.wasm transmux + C MSE 集成 + D hls.js HLS + E 测试矩阵 + F release 准备. CHANGELOG v0.7.0 临时段 + README 支持矩阵 已加.
-**下一目标：v0.7 阶段 C** — 主 agent trigger workflow_dispatch debug build → 主人装 .dmg 实测 (介入点 2: 9 格式 + 同步 + 硬解证据链). 实测通过 → 阶段 D 推 tag → 阶段 E 真 release 段.
+**当前版本：v0.7 (debug build 跑通 2026-07-26)** — 多视频格式 + 视频播放硬件解码: 阶段 B 6 子任务全 PASS + 阶段 C 临时 docs + **build.yml fix (`750017e`)** + **debug build 跑通** (run_id 30161064899, Mac arm64 .dmg 141 MB, ~2 分钟). 同步 git log: 8 commits (912f9bc + 49bf92b + c3837be + 478f908 + c85144b + e8ca1f5 + 0040ac2 + 6027fd8 + 750017e).
+**下一目标：v0.7 介入点 2 — 主人实测** (装 .dmg + 9 格式兼容 + 双窗口同步 + 硬解证据链 3 项). 实测通过 → 阶段 D 推 v0.7.0 tag → 阶段 E 真 release 段.
 **最终目标：v1.0** — Mac/Windows/Linux 全平台安装包 + 公网可用
 
 ---

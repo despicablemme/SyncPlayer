@@ -10,9 +10,9 @@
 ## 🚦 当前迭代
 
 **目标版本**：v0.7 — **多视频格式支持 + 视频播放硬件解码**（立项 2026-07-25，主人决策，原候选主题全部取消，方案 B 拍板 ffmpeg.wasm + MSE + hls.js）
-**当前阶段**：v0.7 **阶段 B 实施 6 子任务全 PASS** (2026-07-25, 6 commits 0040ac2 / e8ca1f5 / c85144b / 478f908 / c3837be / 49bf92bc 已推 origin/main per #15 verify) → **v0.7 阶段 C trigger debug build** (主 agent verify env per #30 + gh CLI trigger workflow_dispatch build_type=debug Mac arm64) → 主人装 .dmg 实测 (介入点 2)
-**上一里程碑**：v0.7 阶段 B 实施 6 子任务完工 (6 commits 推 origin/main, CHANGELOG v0.7.0 临时段 + README 支持矩阵 已加 per B-F). 163/163 测试 pass.
-**下一里程碑**：阶段 C trigger workflow_dispatch debug build → 主人实测 9 格式 + 同步 + 硬解证据链 → 阶段 D 推 v0.7.0 tag → release workflow → 阶段 E 真 release 段
+**当前阶段**：v0.7 **debug build 跑通** (run_id 30161064899, Mac arm64 .dmg 141 MB, 基于 commit `750017e`) → **主人实测 (介入点 2)** (装 .dmg + 9 格式兼容 + 双窗口同步 + 硬解证据链 3 项验证). 实测未开始, 等主人反馈.
+**上一里程碑**：v0.7 阶段 B + C 完工 (6 子任务 commits 推 origin/main, build.yml fix `750017e` 解 verify job startup_failure 根因, debug build PASSED 跑通 ~2 分钟). 163/163 测试 pass.
+**下一里程碑**：主人实测通过 → 阶段 D 推 v0.7.0 tag → release workflow 3 平台 asset → 阶段 E 真 release 段 (CHANGELOG release URL + 3 asset links + STATUS/ROADMAP 下一目标 v0.7.1 / v1.0)
 
 ---
 

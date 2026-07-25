@@ -233,8 +233,10 @@
 - [x] 双窗口同步回归就位 (`sync-dual-window.test.js` 默认 SKIP)
 - [x] 硬解证据链 3 项验证脚本就位 (`hw-decode-evidence.test.js` 默认 SKIP; 阶段 C 主人实测)
 - [x] GitHub Actions Mac arm64 debug build 入口 (`workflow_dispatch build_type=debug`) 已验证 OK (v0.6.2 阶段加, v0.7 复用)
-- [ ] 1 个 B-F commit (本地, 不 push) — **待主 agent 统一 push**
-- [ ] 阶段 C 主人实测 (Mac arm64 debug .dmg) 验收通过 — **待主人介入点 2** (per `tasks/v0.7.0/02-execution-plan.md` §6)
+- [x] **阶段 C 临时文档落地**: STATUS.md / ROADMAP.md / CHANGELOG.md 加 v0.7 "已通过 debug 实测" 段 (per `v4 runbook` §C)
+- [x] **build.yml 修 startup_failure 根因**: `verify` job condition 用了 `github.event.head_commit.message`, 但 `workflow_dispatch` 事件没有此字段 → 整个 workflow 启动失败 (3 次失败). 加 `github.event_name == 'push'` 前置守卫. **commit `750017e`**, 重 trigger PASSED.
+- [x] **GitHub Actions Mac arm64 debug build PASSED** (run_id `30161064899`, head_sha `750017e`, artifact `syncplay-mac-arm64-debug` ≈ 141 MB, ~2 min). Cron 推送 QQ 通知成功.
+- [ ] **阶段 C 主人实测 (Mac arm64 debug .dmg) 验收通过** — **待主人介入点 2**: 装 .dmg + 9 格式兼容 + 双窗口同步 + 硬解证据链 3 项验证 (per `tasks/v0.7.0/02-execution-plan.md` §7)
 
 #### Commits (本版本, 6 子任务, 全部 PASS)
 
