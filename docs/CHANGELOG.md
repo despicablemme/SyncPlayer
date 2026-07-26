@@ -164,6 +164,42 @@
 
 ---
 
+## [0.7.0.1] - 2026-07-26 (hotfix, 不升 version)
+
+### Fixed
+- mkv / avi / flv / mov / wmv 容器文件本地加载失败 (renderer 端 `require()` 在
+  contextIsolation 下抛错导致 transmux 路径永不执行, 走默认 `<video>` 路径).
+  现在本地 mkv 能正常加载 → ffmpeg.wasm transmux → fMP4 → MSE → 播放.
+
+### Changed
+- prebuild.js 同时拷贝 `@ffmpeg/ffmpeg` + `@ffmpeg/util` UMD 包装到 `public/ffmpeg/`,
+  让 renderer 能 `<script>` 加载 (不再依赖 bare-specifier dynamic import).
+- `ffmpeg-loader.js` 改写为 browser-safe + Node-compatible (顶层无 require / __dirname).
+- `container-transmux.js` 顶层去掉 `require('./ffmpeg-loader.js')`, 改用
+  `window.SyncPlayMedia.getFfmpeg` + options 注入 fallback.
+- 修正 plan §1.3 误判: `@ffmpeg/ffmpeg` UMD 实际暴露 `window.FFmpegWASM.FFmpeg`,
+  不是 plan 假设的 `window.FFmpeg`; 保留 fallback 双写以兼容未来直暴露版本.
+
+### Added
+- `desktop/test/integration/renderer-smoke.test.js` — 5 场景 smoke test, 在
+  Electron renderer 真跑 (mp4 native + mkv H.264 transmux + hls network + empty file
+  + wrong format), 主人本地手动触发.
+- `desktop/test/integration/renderer-smoke-runner.js` — Electron 启动脚本, 主进程
+  加载 index.html + 自定义协议 `syncplay-smoke://sample/{mkv,mp4}` 提供只读样本
+  + executeJavaScript 跑 smoke + exit code 回报. 生产 `contextIsolation: true,
+  nodeIntegration: false` 配置不变, 跟主人装机实测一致.
+
+### Not Changed
+- version 保持 0.7.0 (per 主 agent 决策: 不 churn GitHub Actions, 等 v0.7.0 主人实测
+  通过后再发 v0.7.1 包含 license 审计结果)
+
+### Deferred to v0.7.0.2 (standalone 任务, 不阻塞本 hotfix)
+- `@ffmpeg/core` 是 GPL-2.0-or-later (per MEMORY #48), SyncPlay 整体 Apache-2.0.
+  需要主 agent 拍板 license 选项 (A: 整体改 GPL / B: 换 LGPL fork / C: 换
+  `@ffmpeg/core-mt` / D: 联系维护者 relicense). **不在本 hotfix 阻塞项内**.
+
+---
+
 ## [0.7.0] - TBD （阶段 B-A/B/C/D/E 子任务已 PASS，等阶段 C 主人实测验收后定 release 日期）
 
 ### 🎬 多视频格式支持 + 视频播放硬件解码 (v0.7.0)
