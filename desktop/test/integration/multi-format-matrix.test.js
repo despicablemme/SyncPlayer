@@ -3,8 +3,8 @@
 /**
  * Integration test: 9 格式 (8 URL + 1 主人本地) 测试矩阵
  *
- * 默认 SKIP — 需要 Electron renderer (DOM + HTMLMediaElement + MediaSource + Worker + SAB)
- * 才能跑通. 普通 Node test runner 跑会失败:
+ * Electron smoke runner 真跑 — 需要 DOM + HTMLMediaElement + MediaSource + Worker + SAB.
+ * 普通 Node test runner 仍会跳过:
  *   - 没有 document / window / MediaSource / SharedArrayBuffer
  *   - 大文件 (太空旅客.mkv 1.5 GB) 内存读不进来
  *   - 公网 URL 网络依赖
@@ -40,7 +40,9 @@ const SAMPLE_URLS = {
 const PASSENGERS_SAMPLE = process.env.SYNCPLAY_PASSENGERS_SAMPLE
   || '/Volumes/Claw/太空旅客.BD.720p.中英双字幕.mkv';
 
-const ENABLED = process.env.SYNCPLAY_RUN_FORMAT_MATRIX === '1';
+const ENABLED = process.env.SYNCPLAY_RUN_FORMAT_MATRIX === '1'
+  || process.env.SYNCPLAY_RUN_SMOKE === '1';
+const HEVC_SAMPLE = process.env.SYNCPLAY_PASSENGERS_HEVC;
 
 const hasSandbox = typeof SharedArrayBuffer === 'undefined'
   || typeof window === 'undefined'
@@ -73,13 +75,16 @@ function createMockVideoElement() {
 // 跳过条件: 未启用 OR sandbox 环境 OR 主人样本不存在 (mkv_passengers / mkv_h265)
 function makeSkipReason(formatName) {
   if (!ENABLED) {
-    return '设置 SYNCPLAY_RUN_FORMAT_MATRIX=1 后在 Electron renderer + SAB 环境运行 (默认跳过)';
+    return '设置 SYNCPLAY_RUN_SMOKE=1 或 SYNCPLAY_RUN_FORMAT_MATRIX=1 后在 Electron renderer + SAB 环境运行';
   }
   if (hasSandbox) {
-    return 'sandbox 无 DOM / MediaSource / SharedArrayBuffer (默认跳过)';
+    return 'sandbox 无 DOM / MediaSource / SharedArrayBuffer';
   }
   if (formatName === 'mkv_passengers' && !fs.existsSync(PASSENGERS_SAMPLE)) {
     return `测试样本不存在: ${PASSENGERS_SAMPLE}`;
+  }
+  if (formatName === 'mkv_h265' && (!HEVC_SAMPLE || !fs.existsSync(HEVC_SAMPLE))) {
+    return '未设置有效的 SYNCPLAY_PASSENGERS_HEVC 样本, 跳过 mkv H.265';
   }
   return false;
 }
@@ -212,7 +217,6 @@ test('format-matrix: mkv H.265 (4K HEVC) → ffmpeg.wasm → fMP4 → MSE + 硬�
   timeout: 240000,
 }, async () => {
   // 主人实测时: SYNCPLAY_PASSENGERS_HEVC=path/to/your.mkv
-  const HEVC_SAMPLE = process.env.SYNCPLAY_PASSENGERS_HEVC;
   if (!HEVC_SAMPLE || !fs.existsSync(HEVC_SAMPLE)) {
     throw new Error('主人需要设置 SYNCPLAY_PASSENGERS_HEVC=<path-to-hevc-mkv>');
   }
