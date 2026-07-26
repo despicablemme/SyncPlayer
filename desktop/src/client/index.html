@@ -23,6 +23,20 @@
       <button id="loadUrlBtn" class="btn btn-secondary">加载URL</button>
       <label id="fileName" style="color: #888; font-size: 13px;"></label>
     </div>
+    <!-- v0.6.1 FR-4: 视频添加历史记录 -->
+    <div class="video-history-section">
+      <button id="videoHistoryToggleBtn" class="btn btn-secondary" type="button">
+        📜 历史 (<span id="videoHistoryCount">0</span>)
+      </button>
+      <div id="videoHistoryList" class="video-history-list" style="display: none;">
+        <!-- 动态填充 -->
+      </div>
+      <div class="video-history-footer" id="videoHistoryFooter" style="display: none;">
+        <button id="videoHistoryClearAllBtn" class="btn btn-secondary" type="button">
+          🗑️ 清空所有历史
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="video-container">
@@ -42,6 +56,7 @@
       <span id="roomLabel">我的房间号:</span>
       <span id="myRoomId" class="room-id"></span>
       <button id="copyBtn" class="copy-btn">复制</button>
+      <button id="exitBtn" class="exit-btn">退出房间</button>
     </div>
     <div class="stats" id="stats">延迟: —  |  漂移: 0.00s</div>
     <div class="status-item">
@@ -54,18 +69,9 @@
   <script src="config.local.js"></script>      <!-- 404 时浏览器继续,fallback 到 template -->
   <script src="config.template.js"></script>  <!-- 默认占位符 -->
   <script src="../shared/sync-engine.js"></script>
-  <!-- v0.7.0.1-B-B: ffmpeg.wasm 包装必须在 container-transmux.js 之前加载,
-       会写 window.FFmpeg + window.FFmpegUtil (含 toBlobURL / fetchFile) -->
-  <script src="../../public/ffmpeg/ffmpeg.js"></script>
-  <script src="../../public/ffmpeg/ffmpeg-util.js"></script>
-  <script src="../shared/ffmpeg-loader.js"></script>
-  <!-- v0.7 阶段 B-C: MSE 集成 + fMP4 容器转换(必须在 app.js 之前加载,会写 window.SyncPlayMedia) -->
-  <script src="../shared/mp4-ftyp-parser.js"></script>
-  <script src="../shared/container-transmux.js"></script>
-  <script src="mse-player.js"></script>
-  <!-- v0.7 阶段 B-D: file:// index 位于 src/client, 本地 hls.js 位于 desktop/public -->
-  <script src="../../public/hls.min.js"></script>
-  <script src="hls-player.js"></script>
+  <!-- v0.6 FR-3: 房间状态机 + 视频匹配 (必须在 app.js 之前) -->
+  <script src="../shared/room-state.js"></script>
+  <script src="../shared/video-match.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

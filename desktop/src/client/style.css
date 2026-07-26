@@ -190,6 +190,22 @@ body {
   background: #d63a52;
 }
 
+.exit-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: #e94560;
+  border: 1px solid #e94560;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.exit-btn:hover {
+  background: #e94560;
+  color: white;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -235,4 +251,143 @@ body {
   display: flex;
   gap: 16px;
   font-family: monospace;
+}
+
+/* v0.6 FR-3: 视频不匹配红色警告 (in_room_mismatch 状态) */
+.status-item .mismatch-warning {
+  color: #e74c3c;
+  font-weight: 600;
+  background: rgba(231, 76, 60, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease; /* 状态切换平滑, 不闪烁 */
+}
+
+.status-item #localStatus.mismatch-warning {
+  animation: mismatch-pulse 2s infinite;
+}
+
+@keyframes mismatch-pulse {
+  0%, 100% { background: rgba(231, 76, 60, 0.12); }
+  50%      { background: rgba(231, 76, 60, 0.22); }
+}
+
+/* v0.6.1 FR-4: 视频添加历史记录 UI */
+.video-history-section {
+  width: 100%;
+  margin-top: 8px;
+  position: relative;
+}
+
+#videoHistoryToggleBtn {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.video-history-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 6px;
+  background: #1f2a48;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.video-history-empty {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}
+
+.video-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #0f3460;
+  cursor: pointer;
+  transition: background 0.15s;
+  max-width: 100%;
+}
+
+.video-history-item:last-child {
+  border-bottom: none;
+}
+
+.video-history-item:hover:not(.video-history-missing) {
+  background: #2a3a5e;
+}
+
+.video-history-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.video-history-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.video-history-name {
+  color: #eee;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.video-history-path {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.video-history-time {
+  color: #666;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.video-history-remove {
+  background: transparent;
+  color: #888;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: all 0.15s;
+}
+
+.video-history-remove:hover {
+  background: #e74c3c;
+  color: white;
+}
+
+.video-history-item.video-history-missing {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.video-history-item.video-history-missing .video-history-name::before {
+  content: '⚠️ ';
 }

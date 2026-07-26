@@ -133,6 +133,11 @@ async function transmuxToFmp4(input, options = {}) {
   if (!loadFfmpeg) {
     throw new Error('FFMPEG_LOADER_UNAVAILABLE: 既无 options.getFfmpeg 也无 window.SyncPlayMedia.getFfmpeg (renderer 未加载 ffmpeg-loader.js)');
   }
+  // v0.7.0.1 round 2: 0 字节输入直接拒 (不在 activeJob / loadFfmpeg 之后),
+  //   否则 smoke 1 / 空文件上传会卡在 ffmpeg-core WASM 编译 + exec 阶段直到超时
+  if (input && (input.size === 0 || (input.byteLength === 0))) {
+    throw new Error('CONTAINER_UNSUPPORTED: 输入为空 (0 字节)');
+  }
   if (activeJob) {
     throw new Error('TRANSMUX_BUSY: 当前已有转封装任务');
   }
@@ -194,7 +199,7 @@ async function transmuxToFmp4(input, options = {}) {
   }
 }
 
-const exported = {
+const exportedContainer = {
   MAX_INPUT_SIZE,
   buildCopyCommand,
   describeStreams,
@@ -205,12 +210,12 @@ const exported = {
 };
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = exported;
+  module.exports = exportedContainer;
 }
 
 // Browser-side exposure (Electron renderer has contextIsolation: true, nodeIntegration: false,
 // so renderer cannot use require()). Exposed onto shared window.SyncPlayMedia namespace.
 if (typeof window !== 'undefined') {
   window.SyncPlayMedia = window.SyncPlayMedia || {};
-  Object.assign(window.SyncPlayMedia, exported);
+  Object.assign(window.SyncPlayMedia, exportedContainer);
 }

@@ -100,7 +100,9 @@ function parseFtyp(bytes) {
   };
 }
 
-module.exports = { parseFtyp };
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { parseFtyp };
+}
 
 // Browser-side exposure (Electron renderer with contextIsolation has no require)
 // Exposed onto a shared namespace so app.js can pull all media helpers in one place.

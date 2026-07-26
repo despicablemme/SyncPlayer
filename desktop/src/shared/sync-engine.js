@@ -41,6 +41,9 @@
       this.driftOffset = 0;         // 漂移偏移（我与对方的 currentTime 之差）
       this.driftTimer = null;
       this.heartbeatTimer = null;
+      this._onPlay = null;          // v0.6.2 fix: instance reference for unbind
+      this._onPause = null;
+      this._onSeeked = null;
       this._config = Object.assign({}, DEFAULT_CONFIG, config || {});
       this.bindVideoEvents();
     }
@@ -51,9 +54,26 @@
 
     bindVideoEvents() {
       // 收到远程同步指令时设置一个"屏蔽窗口"，期间本地事件不上报
-      this.video.addEventListener('play', () => this.maybeSend('play'));
-      this.video.addEventListener('pause', () => this.maybeSend('pause'));
-      this.video.addEventListener('seeked', () => this.maybeSend('seek'));
+      // v0.6.2 fix: 用 stored reference, 配对 removeEventListener (防反复进房 listener 累积)
+      this._onPlay = () => this.maybeSend('play');
+      this._onPause = () => this.maybeSend('pause');
+      this._onSeeked = () => this.maybeSend('seek');
+      this.video.addEventListener('play', this._onPlay);
+      this.video.addEventListener('pause', this._onPause);
+      this.video.addEventListener('seeked', this._onSeeked);
+    }
+
+    /**
+     * 解绑 video 事件监听。幂等 (重复调用不报错)。
+     * v0.6.2 fix: 反复进房时调用, 防止 listener 累积导致 1 次 play 触发 N 次 maybeSend。
+     */
+    unbindVideoEvents() {
+      if (this._onPlay) this.video.removeEventListener('play', this._onPlay);
+      if (this._onPause) this.video.removeEventListener('pause', this._onPause);
+      if (this._onSeeked) this.video.removeEventListener('seeked', this._onSeeked);
+      this._onPlay = null;
+      this._onPause = null;
+      this._onSeeked = null;
     }
 
     /** 判断是否需要发送本地事件（屏蔽窗口内不发） */

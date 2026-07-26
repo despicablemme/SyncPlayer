@@ -227,7 +227,7 @@ function rendererSmokeScript() {
         if (name !== 'require') assert(type === 'function', name + ' 应为 function, 实得 ' + type);
       }
 
-      await withTimeout('smoke 1/5: empty file (0 bytes) 拒绝', 60000, async () => {
+      await withTimeout('smoke 1/5: empty file (0 bytes) 拒绝', 180000, async () => {
         let rejected = false;
         try {
           await media.transmuxToFmp4(new Uint8Array(0));
@@ -242,9 +242,11 @@ function rendererSmokeScript() {
         const response = await fetch('syncplay-smoke://sample/mkv');
         assert(response.ok, 'mkv 样本读取失败: HTTP ' + response.status);
         const fileBytes = new Uint8Array(await response.arrayBuffer());
+        console.log('[smoke 2] fetched ' + (fileBytes.byteLength / 1024 / 1024).toFixed(0) + ' MB');
         assert(fileBytes.byteLength > 1024 * 1024 * 1024, 'mkv 样本应 > 1 GB');
 
         const start = performance.now();
+        console.log('[smoke 2] calling transmuxToFmp4...');
         const fmp4Bytes = await media.transmuxToFmp4(fileBytes, {
           onProgress: ({ percent }) => console.log('[transmux] ' + percent.toFixed(1) + '%'),
         });

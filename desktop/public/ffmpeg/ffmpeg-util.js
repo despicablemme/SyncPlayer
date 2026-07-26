@@ -1,1 +1,93 @@
-!function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.FFmpegUtil=t():e.FFmpegUtil=t()}(self,(()=>(()=>{"use strict";var e={};(e=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})})(e);var t=function(e,t,o,r){return new(o||(o=Promise))((function(n,i){function d(e){try{l(r.next(e))}catch(e){i(e)}}function a(e){try{l(r.throw(e))}catch(e){i(e)}}function l(e){var t;e.done?n(e.value):(t=e.value,t instanceof o?t:new o((function(e){e(t)}))).then(d,a)}l((r=r.apply(e,t||[])).next())}))};Object.defineProperty(exports,"__esModule",{value:!0}),exports.toBlobURL=exports.downloadWithProgress=exports.importScript=exports.fetchFile=void 0;const o=require("./errors.js"),r=require("./const.js");return exports.fetchFile=e=>t(void 0,void 0,void 0,(function*(){let t;if("string"==typeof e)t=/data:_data\/([a-zA-Z]*);base64,([^"]*)/.test(e)?atob(e.split(",")[1]).split("").map((e=>e.charCodeAt(0))):yield(yield fetch(e)).arrayBuffer();else if(e instanceof URL)t=yield(yield fetch(e)).arrayBuffer();else{if(!(e instanceof File||e instanceof Blob))return new Uint8Array;t=yield(o=e,new Promise(((e,t)=>{const r=new FileReader;r.onload=()=>{const{result:t}=r;t instanceof ArrayBuffer?e(new Uint8Array(t)):e(new Uint8Array)},r.onerror=e=>{var o,r;t(Error(`File could not be read! Code=${(null===(r=null===(o=null==e?void 0:e.target)||void 0===o?void 0:o.error)||void 0===r?void 0:r.code)||-1}`))},r.readAsArrayBuffer(o)})))}var o;return new Uint8Array(t)})),exports.importScript=e=>t(void 0,void 0,void 0,(function*(){return new Promise((t=>{const o=document.createElement("script"),r=()=>{o.removeEventListener("load",r),t()};o.src=e,o.type="text/javascript",o.addEventListener("load",r),document.getElementsByTagName("head")[0].appendChild(o)}))})),exports.downloadWithProgress=(e,n)=>t(void 0,void 0,void 0,(function*(){var t;const i=yield fetch(e);let d;try{const a=parseInt(i.headers.get(r.HeaderContentLength)||"-1"),l=null===(t=i.body)||void 0===t?void 0:t.getReader();if(!l)throw o.ERROR_RESPONSE_BODY_READER;const s=[];let c=0;for(;;){const{done:t,value:r}=yield l.read(),i=r?r.length:0;if(t){if(-1!=a&&a!==c)throw o.ERROR_INCOMPLETED_DOWNLOAD;n&&n({url:e,total:a,received:c,delta:i,done:t});break}s.push(r),c+=i,n&&n({url:e,total:a,received:c,delta:i,done:t})}const f=new Uint8Array(c);let u=0;for(const e of s)f.set(e,u),u+=e.length;d=f.buffer}catch(t){console.log("failed to send download progress event: ",t),d=yield i.arrayBuffer(),n&&n({url:e,total:d.byteLength,received:d.byteLength,delta:0,done:!0})}return d})),exports.toBlobURL=(e,o,r=!1,n)=>t(void 0,void 0,void 0,(function*(){const t=r?yield(0,exports.downloadWithProgress)(e,n):yield(yield fetch(e)).arrayBuffer(),i=new Blob([t],{type:o});return URL.createObjectURL(i)})),e})()));
+'use strict';
+/* v0.7.0.1 round 2: 浏览器端 @ffmpeg/util shim (上游 umd bundle 在 renderer 抛 ReferenceError, 详见 prebuild.js) */
+(function (global) {
+  function fetchFile(target) {
+    if (typeof target === 'string') {
+      const dataMatch = target.match(new RegExp('^data:[^;,]*;base64,(.*)$'));
+      if (dataMatch) {
+        const binary = atob(dataMatch[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return Promise.resolve(bytes);
+      }
+      return fetch(target).then(function (res) { return res.arrayBuffer(); }).then(function (buf) { return new Uint8Array(buf); });
+    }
+    if (target instanceof URL) {
+      return fetch(target).then(function (res) { return res.arrayBuffer(); }).then(function (buf) { return new Uint8Array(buf); });
+    }
+    if (target instanceof File || target instanceof Blob) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const result = reader.result;
+          resolve(result instanceof ArrayBuffer ? new Uint8Array(result) : new Uint8Array(result));
+        };
+        reader.onerror = function () { reject(new Error('File could not be read! Code=' + (reader.error && reader.error.code || -1))); };
+        reader.readAsArrayBuffer(target);
+      });
+    }
+    return Promise.resolve(new Uint8Array(0));
+  }
+
+  function importScript(url) {
+    return new Promise(function (resolve) {
+      const script = document.createElement('script');
+      const onLoad = function () { script.removeEventListener('load', onLoad); resolve(); };
+      script.src = url;
+      script.type = 'text/javascript';
+      script.addEventListener('load', onLoad);
+      document.getElementsByTagName('head')[0].appendChild(script);
+    });
+  }
+
+  function downloadWithProgress(url, onProgress) {
+    return fetch(url).then(function (res) {
+      const total = parseInt(res.headers.get('content-length') || '-1', 10);
+      const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+      if (!reader) {
+        return res.arrayBuffer().then(function (buf) {
+          if (onProgress) onProgress({ url: url, total: buf.byteLength, received: buf.byteLength, delta: 0, done: true });
+          return buf;
+        });
+      }
+      const chunks = [];
+      let received = 0;
+      function pump() {
+        return reader.read().then(function (step) {
+          if (step.done) {
+            if (total !== -1 && total !== received) throw new Error('Incompleted download');
+            if (onProgress) onProgress({ url: url, total: total, received: received, delta: 0, done: true });
+            const out = new Uint8Array(received);
+            let offset = 0;
+            for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.length; }
+            return out.buffer;
+          }
+          received += step.value.length;
+          chunks.push(step.value);
+          if (onProgress) onProgress({ url: url, total: total, received: received, delta: step.value.length, done: false });
+          return pump();
+        });
+      }
+      return pump().catch(function () {
+        return res.arrayBuffer().then(function (buf) {
+          if (onProgress) onProgress({ url: url, total: buf.byteLength, received: buf.byteLength, delta: 0, done: true });
+          return buf;
+        });
+      });
+    });
+  }
+
+  function toBlobURL(url, mime, withProgress, onProgress) {
+    const download = withProgress ? downloadWithProgress(url, onProgress) : fetch(url).then(function (r) { return r.arrayBuffer(); });
+    return download.then(function (bytes) {
+      return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    });
+  }
+
+  global.FFmpegUtil = {
+    fetchFile: fetchFile,
+    importScript: importScript,
+    downloadWithProgress: downloadWithProgress,
+    toBlobURL: toBlobURL,
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
