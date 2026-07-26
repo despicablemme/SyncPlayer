@@ -21,6 +21,17 @@ const hlsSrc = path.join(__dirname, 'node_modules', 'hls.js', 'dist', 'hls.min.j
 const hlsDest = path.join(PUBLIC, 'hls.min.js');
 if (fs.existsSync(hlsSrc)) { fs.copyFileSync(hlsSrc, hlsDest); console.log('[prebuild] hls.min.js ->', hlsDest); }
 
+// v0.7.0.1-B-A: 拷 @ffmpeg/ffmpeg (runner) + @ffmpeg/util UMD 包装, 让 renderer
+//   能 <script> 加载拿 window.FFmpeg + window.FFmpegUtil.toBlobURL, 不依赖 bare
+//   specifier 的 dynamic import (renderer 无 bundler, import('@ffmpeg/...') 失败)
+const ffmpegRunnerSrc = path.join(__dirname, 'node_modules', '@ffmpeg', 'ffmpeg', 'dist', 'umd', 'ffmpeg.js');
+const ffmpegRunnerDest = path.join(PUBLIC, 'ffmpeg', 'ffmpeg.js');
+if (fs.existsSync(ffmpegRunnerSrc)) { fs.copyFileSync(ffmpegRunnerSrc, ffmpegRunnerDest); console.log('[prebuild] ffmpeg.js (runner) ->', ffmpegRunnerDest); }
+
+const ffmpegUtilSrc = path.join(__dirname, 'node_modules', '@ffmpeg', 'util', 'dist', 'umd', 'index.js');
+const ffmpegUtilDest = path.join(PUBLIC, 'ffmpeg', 'ffmpeg-util.js');
+if (fs.existsSync(ffmpegUtilSrc)) { fs.copyFileSync(ffmpegUtilSrc, ffmpegUtilDest); console.log('[prebuild] ffmpeg-util.js ->', ffmpegUtilDest); }
+
 const ffmpegSrc = path.join(__dirname, 'node_modules', '@ffmpeg', 'core', 'dist', 'umd');
 const ffmpegDest = path.join(PUBLIC, 'ffmpeg');
 if (fs.existsSync(ffmpegSrc)) {
