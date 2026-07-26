@@ -12,7 +12,8 @@
  *   新版本:
  *   - 顶层无 require / __dirname, 任何环境都安全 require/import
  *   - createFfmpeg() 内部按环境分支:
- *       renderer: 用 window.FFmpeg (B-B index.html 注入) + window.FFmpegUtil.toBlobURL,
+ *       renderer: 用 window.FFmpegWASM.FFmpeg (B-B index.html 注入, UMD 实际全局名
+ *                 是 FFmpegWASM 而非 plan 假设的 FFmpeg) + window.FFmpegUtil.toBlobURL,
  *                 basePath 从 window.location 推 ../public/ffmpeg
  *       Node:     动态 import('@ffmpeg/ffmpeg') + import('@ffmpeg/util'),
  *                 basePath 用 require('path').join(__dirname, ...)
@@ -69,9 +70,17 @@ function nodeBasePath() {
 }
 
 async function loadFfmpegFromBrowser(basePath) {
-  const FFmpeg = window.FFmpeg;
-  const { toBlobURL } = window.FFmpegUtil || {};
-  if (typeof FFmpeg !== 'function') throw new FfmpegLoadError('load_failure', 'window.FFmpeg 未加载 (确认 index.html <script src="../../public/ffmpeg/ffmpeg.js">)');
+  // v0.7.0.1-B-C deviation (fix plan §1.3 bug): @ffmpeg/ffmpeg UMD 实际暴露到
+  //   window.FFmpegWASM (UMD wrapper 末尾 `e.FFmpegWASM = t()`, t() 返回
+  //   {FFmpeg, FFFSType} 命名导出), 不是 plan 假设的 window.FFmpeg。保留
+  //   window.FFmpeg fallback 兼容未来可能直暴露 FFmpeg class 的版本。
+  const FFmpeg = typeof window.FFmpeg === 'function'
+    ? window.FFmpeg
+    : window.FFmpegWASM && window.FFmpegWASM.FFmpeg;
+  const { toBlobURL } = window.FFmpegUtil && window.FFmpegUtil.toBlobURL
+    ? window.FFmpegUtil
+    : window.FFmpegUtil && window.FFmpegUtil.default;
+  if (typeof FFmpeg !== 'function') throw new FfmpegLoadError('load_failure', 'window.FFmpegWASM.FFmpeg 未加载 (确认 index.html <script src="../../public/ffmpeg/ffmpeg.js">)');
   if (typeof toBlobURL !== 'function') throw new FfmpegLoadError('load_failure', 'window.FFmpegUtil.toBlobURL 未加载 (确认 index.html <script src="../../public/ffmpeg/ffmpeg-util.js">)');
 
   const ffmpeg = new FFmpeg();
