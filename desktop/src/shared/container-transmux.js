@@ -1,6 +1,31 @@
 'use strict';
 
-const { getFfmpeg, resetFfmpeg } = require('./ffmpeg-loader.js');
+// v0.7.0.1-B-D: 去掉顶层 require, 改用 window.SyncPlayMedia.getFfmpeg (renderer 端
+//   由 index.html 先加载 ffmpeg-loader.js 注入) 或 options.getFfmpeg (Node 单测注入)。
+//   原顶层 require 在 renderer (contextIsolation: true, nodeIntegration: false) 抛
+//   ReferenceError, 导致整个文件不执行, window.SyncPlayMedia.transmuxToFmp4 永不暴露。
+function resolveGetFfmpeg(options) {
+  // 优先级: Node 单测注入 > renderer 全局 > 同包 fallback (Node 走 require)
+  if (options && typeof options.getFfmpeg === 'function') return options.getFfmpeg;
+  if (typeof window !== 'undefined' && window.SyncPlayMedia && typeof window.SyncPlayMedia.getFfmpeg === 'function') {
+    return window.SyncPlayMedia.getFfmpeg;
+  }
+  if (typeof require !== 'undefined') {
+    // eslint-disable-next-line global-require
+    return require('./ffmpeg-loader.js').getFfmpeg;
+  }
+  return null;
+}
+function resolveResetFfmpeg() {
+  if (typeof window !== 'undefined' && window.SyncPlayMedia && typeof window.SyncPlayMedia.resetFfmpeg === 'function') {
+    return window.SyncPlayMedia.resetFfmpeg;
+  }
+  if (typeof require !== 'undefined') {
+    // eslint-disable-next-line global-require
+    return require('./ffmpeg-loader.js').resetFfmpeg;
+  }
+  return () => {};
+}
 
 const MAX_INPUT_SIZE = 2 * 1024 ** 3;
 const COPY_VIDEO_CODECS = new Set(['h264', 'hevc', 'h265', 'av1']);
@@ -103,7 +128,11 @@ async function inputBytes(input) {
 }
 
 async function transmuxToFmp4(input, options = {}) {
-  const { onProgress, signal, getFfmpeg: loadFfmpeg = getFfmpeg } = options;
+  const { onProgress, signal } = options;
+  const loadFfmpeg = resolveGetFfmpeg(options);
+  if (!loadFfmpeg) {
+    throw new Error('FFMPEG_LOADER_UNAVAILABLE: 既无 options.getFfmpeg 也无 window.SyncPlayMedia.getFfmpeg (renderer 未加载 ffmpeg-loader.js)');
+  }
   if (activeJob) {
     throw new Error('TRANSMUX_BUSY: 当前已有转封装任务');
   }
@@ -142,7 +171,7 @@ async function transmuxToFmp4(input, options = {}) {
     abortHandler = () => {
       if (terminated) return;
       terminated = true;
-      try { ffmpeg.terminate(); } finally { resetFfmpeg({ terminate: false }); }
+      try { ffmpeg.terminate(); } finally { resolveResetFfmpeg()({ terminate: false }); }
     };
     signal?.addEventListener('abort', abortHandler, { once: true });
 
@@ -165,7 +194,7 @@ async function transmuxToFmp4(input, options = {}) {
   }
 }
 
-module.exports = {
+const exported = {
   MAX_INPUT_SIZE,
   buildCopyCommand,
   describeStreams,
@@ -175,17 +204,13 @@ module.exports = {
   validateFmp4,
 };
 
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = exported;
+}
+
 // Browser-side exposure (Electron renderer has contextIsolation: true, nodeIntegration: false,
 // so renderer cannot use require()). Exposed onto shared window.SyncPlayMedia namespace.
 if (typeof window !== 'undefined') {
   window.SyncPlayMedia = window.SyncPlayMedia || {};
-  Object.assign(window.SyncPlayMedia, {
-    MAX_INPUT_SIZE,
-    buildCopyCommand,
-    describeStreams,
-    parseProbeLog,
-    probeStreams,
-    transmuxToFmp4,
-    validateFmp4,
-  });
+  Object.assign(window.SyncPlayMedia, exported);
 }
