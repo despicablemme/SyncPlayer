@@ -9,6 +9,104 @@
 
 ---
 
+## 会议 #016 — 2026-07-26 v0.7.0.1 mkv bug Phase A 完工 (Claude Round 1 + 主 agent + Claude Round 2)
+
+**参会人员**: 主人 (Bruce)、Jarvis (主控)、Claude (ACP harness, Round 1 + Round 2)
+**主题**: v0.7.0.1 修复 Mac 装机本地 mkv 文件「无法添加」bug — Phase A 双轮敲定最终实施方案
+**耗时**: ~30 分钟 (2 轮 Claude + 主 agent 反馈 + 多次验证)
+**阶段**: v0.7.0.1 Phase A 完工 (Round 2 = FINAL), 等主人拍板 → 派 Builder
+
+---
+
+### Bug 报告 (09:32)
+
+- 主人手动测试 v0.7.0 debug Mac dmg, 反馈本地点 mkv 文件「无法添加」, 文件选择 + 加载链路全部哑火
+- **影响**: v0.7 整个多格式支持的卖点(本地 mkv/avi/flv/mov/wmv) 装机完全不能用
+
+---
+
+### Round 1 (Claude 出诊断 + 3 方案 + 风险分析)
+
+Claude 在 `tasks/v0.7.0.1/01-round1-fix-plan.md`(已在主 agent 反馈前 commit) 暴露**双层根因**:
+
+| # | 根因 | 后果 |
+|---|------|------|
+| 1 | `desktop/src/shared/container-transmux.js:3` 顶层 `require('./ffmpeg-loader.js')` | renderer `ReferenceError: require is not defined`, 整文件不执行 |
+| 2 | `desktop/src/shared/ffmpeg-loader.js:3` 顶层 `require('path')` + `:36` 动态 `import('@ffmpeg/ffmpeg')` 裸 specifier | renderer 同样炸, 这是 Claude Round 1 主动暴露的**隐藏坑** (我自己只看第一层时漏了) |
+
+**连锁**: `window.SyncPlayMedia.transmuxToFmp4` undefined → `app.js:289` 门控 false → 兜底 `video.src = blobUrl` → Chromium 解不了 mkv → 用户看到「无法添加」
+
+**集成测试为什么漏**:
+- `desktop/test/unit/container-transmux.test.js` 全部 6 个测试用 `options.getFfmpeg` 注入 fake 实现, 真实 `createFfmpeg()` 在测试中**永不执行**
+- `desktop/test/integration/multi-format-matrix.test.js` 默认 **SKIP** (要 Electron renderer + SAB + DOM + MediaSource), 整个 v0.7 项目**从未真跑过** renderer 集成测试
+
+### Plan A/B/C 对比
+
+- **Plan A (临时)**: 1 行 `accept` + duck-type guard, 风险是只修表象
+- **Plan B (干净重构, 推荐)**: ~120 行, 7 步拆 commit, Node 单测零破坏
+- **Plan C (切 bundled mode)**: 放弃 ffmpeg.wasm, 改 mpv-bin, 复杂度爆炸
+
+### 主 agent Round 1 反馈 (给 Claude Round 2 的输入)
+
+- ✅ 选 Plan B, 不要其他方案
+- 📌 集成测试必须真跑 (renderer-smoke 5 场景, multi-format-matrix 改默认真跑不 SKIP) — 这是 bug 漏出去的根本
+- 📌 prebuild.js 现状调研 (`ls -la node_modules/@ffmpeg/ffmpeg/dist/umd` 确认 UMD 实际产物路径)
+- 📌 LICENSE 审计 (`@ffmpeg/core` GPL-2.0-or-later, per MEMORY #48) 作为 v0.7.0.2 standalone 任务, 不阻塞本 hotfix
+
+---
+
+### Round 2 (Claude 出 FINAL 实施方案, commit `dccbfe8`, 1008 行, `tasks/v0.7.0.1/03-round2-execution-plan.md`)
+
+主 agent 验证: 读了 7 步 commit 全文 + 根因链表 + §4 smoke test 设计 + §5 DoD, **结构 + 内容 + 数字 + 代码块全部一致**, 不盲信。
+
+**7 步 commit** (每步一个, 风格延续 v0.7-B-A/B/C...):
+
+| # | commit | 文件 | 关键改动 |
+|---|--------|------|----------|
+| B-A | `fix(v0.7.0.1-prebuild)` | `desktop/prebuild.js` (+~10 行) | 拷 `@ffmpeg/ffmpeg/dist/umd/ffmpeg.js` (4.4 KB) + `@ffmpeg/util/dist/umd/index.js` (3.0 KB) 到 `public/ffmpeg/`, 不拷 webpack chunk / sourcemap |
+| B-B | `fix(v0.7.0.1-index)` | `desktop/src/client/index.html` (+~6 行) | container-transmux 前 `<script>` 加载 `../../public/ffmpeg/{ffmpeg.js,ffmpeg-util.js}`, 拿 `window.FFmpeg` + `window.FFmpegUtil.toBlobURL` |
+| B-C | `fix(v0.7.0.1-loader)` | `desktop/src/shared/ffmpeg-loader.js` (改 ~40 行, 79→~85) | 顶层 `require('path')` / `__dirname` 全删, `createFfmpeg()` 内部按环境分支 (renderer 用 window 全局 + browserBasePath; Node 用 dynamic import + nodeBasePath) |
+| B-D | `fix(v0.7.0.1-transmux)` | `desktop/src/shared/container-transmux.js` (改 ~25 行) | 顶层 `require('./ffmpeg-loader.js')` 删, 改用 `window.SyncPlayMedia.getFfmpeg` (B-C 暴露), options 注入 fallback 保留 → Node 单测零破坏 |
+| B-E | `test(v0.7.0.1-smoke)` | `desktop/test/integration/renderer-smoke.test.js` (新, ~250 行) + `desktop/test/integration/multi-format-matrix.test.js` (改, 取消 SKIP 默认) | 5 场景真跑: mp4 native + mkv H.264 transmux + hls network + empty file + wrong format |
+| B-F | `chore(v0.7.0.1-smoke-runner)` | `desktop/test/integration/renderer-smoke-runner.js` (新, ~140 行) | Electron 启动器: 主进程 `webContents.executeJavaScript` 注入 node:test runner + IPC 收结果 + exit code 回报; `sandbox: false` 允许 `import('node:test')` 跑 (生产 app 仍 sandbox=true) |
+| B-G | `docs(v0.7.0.1)` | `docs/CHANGELOG.md` (+~20 行) | 加 `[0.7.0.1] - 2026-07-26 (hotfix, 不升 version)` 段, version 保持 0.7.0 不 churn GitHub Actions release build |
+
+### DoD (装配机实测)
+
+- **Node 层**: `cd desktop && npm test` → 138 个单测零破坏 (B-B 6 + B-C 20 + 既有 112 + 1 个新 smoke stub)
+- **Electron renderer 层**: 开发模式 `cd desktop && npm start`, DevTools console 验证 `window.SyncPlayMedia.transmuxToFmp4` 是 function / `window.FFmpeg` 存在 / 选真实 mkv 加载 → transmux → MSE → 播放, 首帧时间对得上 6880s duration
+- **dmg 层**: GitHub Actions `workflow_dispatch` trigger debug build → 装机实测
+
+### Smoke Test 关键决策
+
+- **谁负责跑**: 主 agent 推荐**主人手动**(Mac 本地有 `太空旅客.mkv`), CI macOS runner 太贵不划算 (per MEMORY, syncplay CI 只跑 Linux 单测)
+- **触发方式**: `SYNCPLAY_RUN_SMOKE=1 SYNCPLAY_SMOKE_MKV="/Volumes/Claw/太空旅客.BD.720p.中英双字幕.mkv" npx electron test/integration/renderer-smoke-runner.js`, 默认拒绝启动 (sanity check)
+- **退出码**: 0 = 5 场景全过, 1 = 至少 1 个失败, 在 main agent 里 trap 出来写进 MEETINGS 完工汇报
+
+### Not Blocking (deferred to v0.7.0.2 standalone, per MEMORY #48)
+
+- `@ffmpeg/core` GPL-2.0-or-later vs SyncPlay Apache-2.0 冲突
+- 4 个选项待主 agent 派 Claude 调研: A 整体改 GPL / B 换 LGPL fork / C 换 `@ffmpeg/core-mt` / D 联系维护者 relicense
+
+### Files
+
+- `tasks/v0.7.0.1/03-round2-execution-plan.md` (新, 1008 行, commit `dccbfe8`)
+- `desktop/src/shared/{container-transmux,ffmpeg-loader}.js` (改)
+- `desktop/prebuild.js` (改)
+- `desktop/src/client/index.html` (改)
+- `desktop/test/integration/{renderer-smoke.test,renderer-smoke-runner}.js` (新)
+- `desktop/test/integration/multi-format-matrix.test.js` (改, 取消 SKIP 默认)
+- `docs/CHANGELOG.md` (改)
+- `docs/MEETINGS.md` (本条 #016)
+
+### Next
+
+- 等主人拍板 (Phase B/C gate)
+- 拍板 → 主 agent 派 Builder 按 B-A→B-G 顺序实施, 配 cron 轮询监控完工 (per MEMORY #20.2)
+- 完工后 → sync 回归 (老 SyncEngine 路径不动, 验 mp4 native + hls 仍 work) + dmg 装机实测太空旅客.mkv DoD
+
+---
+
 ## 会议 #015 — 2026-07-25 v0.7 阶段 A 完工 (Claude 双轮方案 + 主 agent + 主人拍板)
 
 **参会人员**：主人 (Bruce)、Jarvis (主控)、Claude (ACP harness, Round 1 + Round 2)
