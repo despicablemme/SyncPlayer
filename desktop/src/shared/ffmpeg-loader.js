@@ -55,21 +55,10 @@ function classifyLoadError(error) {
 //   例: file:///Users/bruce/CodeProjects/syncplay/desktop/src/client/index.html
 //     → dirname = .../desktop/src/client/
 //     → ../public/ffmpeg → .../desktop/public/ffmpeg/
-// v0.7.0.1 round 2 fix: 浏览器 fetch() 不解析 URL 里的 `..`, 必须先 normalize,
-  //   否则 toBlobURL('file://.../src/client/../public/ffmpeg/ffmpeg-core.js')
-  //   直接抛 "Failed to fetch".
 function browserBasePath() {
   if (typeof window === 'undefined') return null;
-  // v0.7.0.1 round 2 fix: 路径要 up 两层 (../ 才一层到 src/, 不是 desktop/),
-  //   且浏览器 fetch() 不解析 URL 里的 `..`, 必须先 URL() normalize,
-  //   否则 toBlobURL('file://.../src/client/../public/ffmpeg/...')
-  //   直接抛 "Failed to fetch" (实际写到 src/public/ffmpeg, 文件不在).
-  try {
-    return new URL('../../public/ffmpeg', window.location.href).pathname;
-  } catch (_) {
-    const dir = window.location.pathname.replace(/\/[^/]*$/, '');
-    return (dir + '/../../public/ffmpeg').replace(/\\/g, '/');
-  }
+  const dir = window.location.pathname.replace(/\/[^/]*$/, '');
+  return (dir + '/../public/ffmpeg').replace(/\\/g, '/');
 }
 
 // Node basePath: 沿用原版 path.join(__dirname, '..', '..', 'public', 'ffmpeg')
@@ -114,12 +103,7 @@ async function loadFfmpegFromNode(basePath) {
 }
 
 async function createFfmpeg() {
-  // v0.7.0.1 round 2 fix: 上游 UMD 实际暴露 window.FFmpegWASM.FFmpeg, 不一定
-  //   window.FFmpeg. 光检查 window.FFmpeg 会漏掉 B-B 注入的全局, 误判成
-  //   "非浏览器" → 走 nodeBasePath → 在 renderer 抛 "无法解析 basePath".
-  const inBrowser = typeof window !== 'undefined'
-    && (typeof window.FFmpeg === 'function'
-        || (window.FFmpegWASM && typeof window.FFmpegWASM.FFmpeg === 'function'));
+  const inBrowser = typeof window !== 'undefined' && typeof window.FFmpeg === 'function';
   const basePath = inBrowser ? browserBasePath() : nodeBasePath();
   if (!basePath) {
     throw new FfmpegLoadError('load_failure', '无法解析 ffmpeg-core basePath (既不在 browser 也不在 Node 环境)');

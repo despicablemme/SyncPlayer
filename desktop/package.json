@@ -35,13 +35,14 @@
       "main.js",
       "preload.js",
       "package.json",
-      "src/**/*"
+      "src/**/*",
+      "public/**/*.js"
     ],
     "asar": true,
     "asarUnpack": [
       "node_modules/**/*",
       "src/server/**",
-      "public/**/*"
+      "public/**/*.wasm"
     ],
     "extraResources": [
       {

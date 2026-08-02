@@ -403,6 +403,17 @@
   const exitBtn = document.getElementById('exitBtn');
 
   let connMgr = null;
+  let activeMse = null; // v0.7-B-C: track active MsePlayer so we can destroy on next load
+  let activeHls = null; // v0.7-B-D: track active HlsPlayer so we can destroy on next load
+
+  // v0.7-B-C: pull media helpers exposed on window.SyncPlayMedia by the
+  // mp4-ftyp-parser / container-transmux / mse-player <script> tags in index.html.
+  const { MsePlayer, transmuxToFmp4, parseFtyp } = window.SyncPlayMedia || {};
+  const HlsPlayer = window.SyncPlayHlsPlayer;
+
+  // v0.7-B-C: 容器文件后缀 (走 ffmpeg.wasm transmux + MSE)
+  const CONTAINER_RE = /\.(mkv|avi|flv|mov|wmv)(\?|$)/i;
+  const HLS_RE = /\.m3u8(\?|$)/i;
 
   // ============ v0.6 FR-3: 房间状态机 + 视频信息同步 ============
 
@@ -594,34 +605,98 @@
   //   3. 不在 src= 后立即再调 load() (会 abort + reload, 偶发 race)
   // FR-3 扩展:
   //   4. 解耦: 视频加载完全独立于房间 (loadedmetadata 时更新 myVideoInfo 并广播)
-  function loadVideo(src, label) {
+  async function loadVideo(src, label, options = {}) {
+    fileName.textContent = label;
+    video.style.display = 'block';
+    noVideo.style.display = 'none';
+
+    // v0.7-B-C: 销毁前一个 MsePlayer (loadVideo 多次调用时不泄漏 MediaSource)
+    if (activeMse) {
+      try { activeMse.destroy(); } catch (_) {}
+      activeMse = null;
+    }
+    // v0.7-B-D: 销毁前一个 HlsPlayer (切换来源时不泄漏 hls.js 实例)
+    if (activeHls) {
+      try { activeHls.destroy(); } catch (_) {}
+      activeHls = null;
+    }
+
+    const sourceName = (options.file && options.file.name) || src || '';
+    const isHls = HLS_RE.test(sourceName);
+    if (isHls) {
+      let hls = null;
+      try {
+        if (!HlsPlayer) throw new Error('HLS_NOT_SUPPORTED');
+        hls = new HlsPlayer(video, src);
+        await hls.attach();
+        activeHls = hls;
+        return;
+      } catch (e) {
+        try { hls && hls.destroy(); } catch (_) {}
+        toast('HLS 错误: ' + e.message, 'error');
+        throw e;
+      }
+    }
+
+    // v0.7-B-C: 检测 mkv/avi/flv/mov/wmv 容器
+    // - options.file: 本地 File 对象 (来自 file input)
+    // - src 末尾后缀: 远程 URL
+    const containerName = (options.file && options.file.name) || src || '';
+    const isContainer = !src.startsWith('data:') && CONTAINER_RE.test(containerName);
+
+    if (isContainer && MsePlayer && transmuxToFmp4 && parseFtyp) {
+      try {
+        toast('正在转封装 mkv/avi/flv ...', 'info');
+        const input = options.file || await fetch(src).then(function(r) {
+          if (!r.ok) throw new Error('FETCH_FAIL_' + r.status);
+          return r.blob();
+        });
+        const fmp4Bytes = await transmuxToFmp4(input, {
+          onProgress: function(progress) {
+            toast('转封装进度 ' + (progress.percent || 0).toFixed(0) + '%', 'info');
+          },
+        });
+
+        // v0.7-B-C: parse ftyp to get codec 4CC hint for MSE SourceBuffer MIME
+        let ftypInfo;
+        try {
+          ftypInfo = parseFtyp(fmp4Bytes);
+        } catch (e) {
+          ftypInfo = { mimeType: 'video/mp4', codec: 'avc1' };
+        }
+
+        const mse = new MsePlayer(video);
+        activeMse = mse;
+        await mse.addSourceBuffer(ftypInfo.mimeType, ftypInfo.codec);
+        await mse.appendFmp4(fmp4Bytes);
+        await mse.end();
+        return;
+      } catch (e) {
+        const msg = (e && e.message) || String(e);
+        if (msg.indexOf('SOFT_ENCODE_FALLBACK_UNSUPPORTED') !== -1) {
+          toast('SyncPlay 暂不支持此格式，请用 VLC 打开或转码为 MP4 (H.264+AAC)', 'error');
+          return;
+        }
+        console.error('[loadVideo] transmux error', e);
+        toast('加载失败: ' + msg, 'error');
+        return;
+      }
+    }
+
     // 1. 完整 reset: pause + 移除旧 src + load() 触发空载
     try { video.pause(); } catch (e) { /* 元素可能没准备好, 忽略 */ }
     video.removeAttribute('src');
     video.load();
 
-    // 2. HLS / m3u8 能力检测 (Safari 原生支持; Chrome/Firefox 需要 hls.js)
-    //    不支持时 toast 警告, 用户知道为什么没画面(避免黑屏困惑)
-    if (/\.m3u8(\?.*)?$/i.test(src)) {
-      const canHls = video.canPlayType('application/vnd.apple.mpegurl') !== ''
-                  || video.canPlayType('application/x-mpegURL') !== '';
-      if (!canHls) {
-        toast('当前浏览器不支持 HLS 流(m3u8), 请用 Safari 或安装 hls.js', 'error');
-      }
-    }
-
-    // 3. 设置新 src (浏览器自动 load, 无需再调 video.load())
-    fileName.textContent = label;
+    // 2. 设置新 src (浏览器自动 load, 无需再调 video.load())
     video.src = src;
-    video.style.display = 'block';
-    noVideo.style.display = 'none';
   }
 
   videoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      loadVideo(url, '本地: ' + file.name);
+      loadVideo(url, '本地: ' + file.name, { file });
       await videoHistory.addLocal(file); // v0.6.1 FR-4: 自动写历史
     }
   });
